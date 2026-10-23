@@ -114,6 +114,23 @@ MCP 游戏进度按 device + agent + session 隔离。第三方业务模式没�
 
 模型不一定严格遵循提示词，需要真机验收工具调用率和逐字播报行为。若模型跳过工具，优先使用方式 A。
 
+## 查询不到 MCP 工具时
+
+先检查：类型必须为 SSE，地址为 `https://placid.cyou/mcp`（不是网页首页或 `/mcp/message`）；Header 名为 `Authorization`，值为 `Bearer ` 加服务令牌（Bearer 后有一个空格）。令牌来源是本机游戏服务 `.env` 的 `LINX_SERVICE_TOKEN`，不是灵矽账号 token，也不是设备 WebSocket token。SSE GET 和后续消息 POST 都要带该 Header。
+
+如果配置模板需要填写字段，请放到 `sse.header`，不要放在 URL Query 参数中。保存/更新 MCP 配置后再重新查询工具。
+
+服务端临时设置 `MCP_DIAGNOSTICS=1` 并重启，控制台会输出 `[mcp]` 日志：
+
+- 无任何 received：请求没有抵达当前服务，检查地址、平台出口网络、DNS 和 frp。
+- `hasAuthorization=false`：平台没有传 Header。
+- `authValid=false` + 401：令牌或 Bearer 格式不匹配；不要临时关闭认证。
+- GET 成功但没有 initialize：SSE/消息端点协商或客户端连接失败。
+- initialize 成功但没有 tools/list：客户端初始化流程没有完成。
+- tools/list 已到达：再检查响应解析或平台具体报错；不能只凭 POST 202 就认定客户端收到工具列表。
+
+日志仅记录方法、已知路径、状态、耗时、RPC 方法及认证/身份是否存在，不记录实际令牌、设备 ID、会话 ID、查询串或工具参数。定位后将诊断关闭。
+
 ## 真机验收清单（尚未执行）
 
 - [ ] “开始游戏”能听到第一道题的完整题面。

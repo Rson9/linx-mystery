@@ -70,7 +70,7 @@ npm start
 ## 测试
 
 ```bash
-npm test          # 16 项引擎与 HTTP/MCP 集成测试
+npm test          # 17 项引擎与 HTTP/MCP 集成测试
 npm run test:e2e  # Chrome：桌面 + 手机两个完整流程
 npm run voice:test # 18 项语音终端测试（原生 Opus 测试缺少库时跳过）
 ```

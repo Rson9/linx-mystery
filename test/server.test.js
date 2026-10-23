@@ -58,6 +58,17 @@ test('官方 MCP 客户端完成 SSE 初始化、工具发现及游戏调用', {
   assert.match(JSON.parse(result.content[0].text).answer, /闪光灯/);
   await client.close();
 });
+test('MCP 诊断区分认证失败且不记录令牌、查询串、身份或工具参数', async t => {
+  const logs = [];
+  const { base } = await setup(t, { diagnostics: true, diagnosticLog: entry => logs.push(entry) });
+  const result = await post(`${base}/mcp/message?sessionId=private-session&api_key=private-key`,
+    { method: 'tools/call', params: { secret: 'private-argument' } },
+    { Authorization: 'Bearer wrong-secret', 'X-Linx-Device-Id': 'private-device', 'X-Linx-Session-Id': 'private-session' });
+  assert.equal(result.status, 401);
+  assert.ok(logs.some(x => x.event === 'closed' && x.status === 401 && x.authValid === false && x.rpcMethod === 'tools/call'));
+  const serialized = JSON.stringify(logs);
+  for (const secret of ['wrong-secret', 'private-session', 'private-key', 'private-argument', 'private-device']) assert.ok(!serialized.includes(secret));
+});
 test('MCP 缺少设备身份只能发现工具，不能创建游戏', { timeout: 15000 }, async t => {
   const { base } = await setup(t);
   const headers = { Authorization: 'Bearer test-secret' };

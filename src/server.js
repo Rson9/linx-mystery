@@ -21,13 +21,33 @@ const equal = (a, b) => {
   return aa.length === bb.length && timingSafeEqual(aa, bb);
 };
 
-export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = createSemanticRouter({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL }), publicOrigin = process.env.PUBLIC_ORIGIN } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = createSemanticRouter({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL }), publicOrigin = process.env.PUBLIC_ORIGIN, diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
   const app = express();
   const engine = new GameEngine(dbPath, semantic);
   const connections = new Map();
   const buckets = new Map();
   const housekeeping = setInterval(() => { const now = Date.now(); for (const [key, b] of buckets) if (b.until < now) buckets.delete(key); }, 60000).unref();
   app.disable('x-powered-by');
+  app.use((req, res, next) => {
+    if (diagnostics && req.path.startsWith('/mcp')) {
+      const started = Date.now();
+      const entry = {
+        time: new Date().toISOString(), method: req.method,
+        path: ['/mcp', '/mcp/message'].includes(req.path) ? req.path : '/mcp/*',
+        hasAuthorization: Boolean(req.get('authorization')),
+        authValid: Boolean(token) && equal(req.get('authorization'), `Bearer ${token}`),
+        hasDevice: Boolean(req.get('x-linx-device-id')),
+        hasSession: Boolean(req.get('x-linx-session-id'))
+      };
+      diagnosticLog({ ...entry, event: 'received' });
+      res.on('close', () => {
+        const methods = ['initialize', 'notifications/initialized', 'tools/list', 'tools/call', 'ping'];
+        diagnosticLog({ ...entry, event: 'closed', status: res.statusCode, elapsedMs: Date.now() - started,
+          rpcMethod: methods.includes(req.body?.method) ? req.body.method : null });
+      });
+    }
+    next();
+  });
   app.use((req, res, next) => {
     res.set({ 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; frame-ancestors 'none'; form-action 'self'", 'Permissions-Policy': 'microphone=(self)' });
     const origin = req.get('origin');
