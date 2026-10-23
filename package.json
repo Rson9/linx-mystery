@@ -12,6 +12,7 @@
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "test": "node --test test/*.test.js",
     "test:e2e": "playwright test",
+    "mcp:check": "node --env-file-if-exists=.env scripts/check-mcp.mjs",
     "voice:setup": "node scripts/voice.mjs setup",
     "voice:activate": "node scripts/voice.mjs activate",
     "voice:check": "node scripts/voice.mjs check",

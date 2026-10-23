@@ -41,7 +41,7 @@ npm run voice:start      # 回车开始录音，再次回车结束；q 退出
 - 100 分起算；每个提示扣 15 分，超过 5 次的每次提问扣 2 分，首次之后每次提交答案扣 5 分，最低 0 分。揭晓不计分。
 - SQLite 持久化，网页按 HttpOnly cookie 隔离，灵矽按设备/智能体/会话隔离。
 - 第三方业务 `POST /api/chat/stream`，返回文档规定的 SSE。
-- 云端 MCP `GET /mcp` + `POST /mcp/message`，使用官方 SDK，兼容灵矽文档要求的旧版 HTTP+SSE。
+- 云端 MCP 仅提供 **Streamable HTTP `POST /mcp`**，认证选 Normal 并传入 Authorization；使用官方 SDK，无状态传输，游戏状态存入 SQLite。旧 SSE 已删除。
 - 可选 OpenAI-compatible 语义路由。模型只选事实编号，播报由服务端固定文本生成，异常自动退回规则。
 
 ## 玩法边界
@@ -70,9 +70,10 @@ npm start
 ## 测试
 
 ```bash
-npm test          # 17 项引擎与 HTTP/MCP 集成测试
+npm test          # 19 项引擎与 HTTP/MCP 集成测试
 npm run test:e2e  # Chrome：桌面 + 手机两个完整流程
 npm run voice:test # 18 项语音终端测试（原生 Opus 测试缺少库时跳过）
+npm run mcp:check # 使用本地 .env 通过 Streamable HTTP 查询部署服务的工具列表
 ```
 
 E2E 默认使用已安装的 Chrome。测试覆盖：开局、提问、提示、判题、换关、刷新恢复、揭晓二次确认、设备隔离、身份缺失拒绝、SSE session_id、官方 MCP 客户端工具发现/调用、跨站请求、认证和超限消息体。**不覆盖实际麦克风采集、浏览器厂商语音服务、灵矽 ASR/TTS 和真机。**

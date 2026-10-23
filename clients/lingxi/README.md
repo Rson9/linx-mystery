@@ -36,7 +36,7 @@ npm run voice:activate
 
 ## Agent 上启用谜声
 
-1. 给 Agent 绑定云端 MCP，SSE URL 为部署服务的 `/mcp`。
+1. 给 Agent 绑定云端 MCP，传输协议选 **Streamable HTTP**、认证模式选 **Normal**，URL 为部署服务的 `/mcp`。不再支持旧 SSE。
 2. 示例部署地址为 `https://placid.cyou/mcp`（依赖对应电脑、游戏服务及 frp 持续在线）。
 3. 配置 `Authorization: Bearer <LINX_SERVICE_TOKEN>`；服务令牌在游戏服务 `.env`，不是设备 WebSocket token，两者不同。
 4. 启用支持工具调用的意图识别模式（例如 Function Call），聊天模型需要支持工具调用，不能选择“无意图识别”。

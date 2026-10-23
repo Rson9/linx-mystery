@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createApp } from '../src/server.js';
 
 async function setup(t, options = {}) {
@@ -45,10 +45,10 @@ test('灵矽业务 SSE 保留 session_id，设备和会话隔离', async t => {
   assert.match((await chat('device-b', 'session-a', '给我提示'))[0].details.answer, /开始游戏/);
   assert.match((await chat('device-a', 'session-b', '给我提示'))[0].details.answer, /开始游戏/);
 });
-test('官方 MCP 客户端完成 SSE 初始化、工具发现及游戏调用', { timeout: 15000 }, async t => {
+test('官方 MCP 客户端完成 Streamable HTTP 初始化、工具发现及游戏调用', { timeout: 15000 }, async t => {
   const { base } = await setup(t);
   const headers = { Authorization: 'Bearer test-secret', 'X-Linx-Device-Id': 'mcp-device', 'X-Linx-Agent-Id': 'mcp-agent', 'X-Linx-Session-Id': 'mcp-session' };
-  const transport = new SSEClientTransport(new URL(`${base}/mcp`), { requestInit: { headers }, eventSourceInit: { fetch: (url, init) => { const merged = new Headers(init?.headers); for (const [key, value] of Object.entries(headers)) merged.set(key, value); return fetch(url, { ...init, headers: merged }); } } });
+  const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers } });
   const client = new Client({ name: 'integration-test', version: '1.0' }); t.after(() => client.close());
   await client.connect(transport);
   const tools = await client.listTools(); assert.ok(tools.tools.some(t => t.name === 'mystery_turn'));
@@ -61,7 +61,7 @@ test('官方 MCP 客户端完成 SSE 初始化、工具发现及游戏调用', {
 test('MCP 诊断区分认证失败且不记录令牌、查询串、身份或工具参数', async t => {
   const logs = [];
   const { base } = await setup(t, { diagnostics: true, diagnosticLog: entry => logs.push(entry) });
-  const result = await post(`${base}/mcp/message?sessionId=private-session&api_key=private-key`,
+  const result = await post(`${base}/mcp?sessionId=private-session&api_key=private-key`,
     { method: 'tools/call', params: { secret: 'private-argument' } },
     { Authorization: 'Bearer wrong-secret', 'X-Linx-Device-Id': 'private-device', 'X-Linx-Session-Id': 'private-session' });
   assert.equal(result.status, 401);
@@ -72,9 +72,36 @@ test('MCP 诊断区分认证失败且不记录令牌、查询串、身份或工�
 test('MCP 缺少设备身份只能发现工具，不能创建游戏', { timeout: 15000 }, async t => {
   const { base } = await setup(t);
   const headers = { Authorization: 'Bearer test-secret' };
-  const transport = new SSEClientTransport(new URL(`${base}/mcp`), { requestInit: { headers }, eventSourceInit: { fetch: (url, init) => fetch(url, { ...init, headers }) } });
+  const transport = new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers } });
   const client = new Client({ name: 'no-identity', version: '1' }); t.after(() => client.close()); await client.connect(transport);
   assert.ok((await client.listTools()).tools.length > 0);
   const result = await client.callTool({ name: 'mystery_turn', arguments: { action: 'start' } }); assert.equal(result.isError, true);
   await client.close();
+});
+test('只提供 Streamable HTTP POST，旧 SSE 和消息端点不再存在', async t => {
+  const { base } = await setup(t);
+  const headers = { Authorization: 'Bearer test-secret' };
+  for (const method of ['GET', 'DELETE']) {
+    const response = await fetch(`${base}/mcp`, { method, headers });
+    assert.equal(response.status, 405); assert.equal(response.headers.get('allow'), 'POST');
+  }
+  assert.equal((await post(`${base}/mcp/message`, {}, headers)).status, 404);
+});
+test('无状态传输的不同客户端可恢复同一玩家进度且设备互相隔离', async t => {
+  const { base } = await setup(t);
+  const call = async (device, action) => {
+    const client = new Client({ name: 'stateless-test', version: '1' });
+    try {
+      await client.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp`), { requestInit: { headers: {
+        Authorization: 'Bearer test-secret', 'X-Linx-Device-Id': device, 'X-Linx-Session-Id': 'shared-session'
+      } } }));
+      const result = await client.callTool({ name: 'mystery_turn', arguments: { action } });
+      assert.ok(!result.isError);
+      return JSON.parse(result.content[0].text);
+    } finally { await client.close(); }
+  };
+  await call('device-one', 'start');
+  assert.match((await call('device-one', 'hint')).answer, /提示 1/);
+  assert.match((await call('device-one', 'hint')).answer, /提示 2/);
+  assert.equal((await call('device-two', 'status')).state, null);
 });

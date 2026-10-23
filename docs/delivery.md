@@ -22,7 +22,7 @@
 
 - Node.js + Express；不依赖前端打包工具。
 - 原生 SQLite 持久化；同一玩家的异步请求串行处理。
-- MCP 使用官方 SDK 的旧版 SSE transport，与灵矽当前文档一致。
+- MCP 使用官方 SDK 的 Streamable HTTP transport，按实际控制台协议实现；已移除初版的旧 SSE transport。
 - ASR/TTS 交由灵矽；网页 Speech API 明确标记为独立试玩功能。
 - 模型增强可选，返回值只能选择审核事实 ID，不能决定通关或生成新事实。
 - 安装及使用见 README，真机步骤见 linx-integration.md。
@@ -53,7 +53,7 @@
 
 ## 验证结果
 
-- `npm test`：16 项通过。
+- `npm test`：19 项通过（包含后续诊断与 Streamable HTTP 迁移测试）。
 - `npm run test:e2e`：桌面 1440×1080、手机 390×844 两项通过。
 - E2E 覆盖开局、询问、刷新、提示、提交、计分、换关、取消/确认揭晓。
 - 已检查浏览器截图，无横向溢出、无 pageerror。
@@ -74,3 +74,4 @@
 - 后续设备已绑定，真实 WSS 握手通过；合成语音“开始游戏”被平台 ASR 正确识别，并返回可解码的 TTS 音频。没有采集麦克风或播放扬声器。
 - 增加 `voice:probe` 和 `voice:smoke`，语音终端测试扩展到 18 项，通过。
 - 当前实际回复仍是默认“嘟嘟熊”角色，没有游戏题面；Agent 的 MCP 绑定、Function Call 和角色配置仍需核对。麦克风真实录音、扬声器实际播放和游戏语音全流程尚未验收。
+- 实际控制台仅提供 Streamable HTTP / Normal。已将 MCP 改为无状态 Streamable HTTP POST /mcp，删除旧 SSE 和 /mcp/message。工具发现无需设备身份，每次游戏调用从当前 POST 读取设备身份；补充跨客户端状态恢复、设备隔离、GET/DELETE 405 及旧端点 404 测试。第三方业务回调 SSE 是独立协议，不受该迁移影响。

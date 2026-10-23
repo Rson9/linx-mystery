@@ -1,105 +1,48 @@
-# 灵矽接入与真机验收
+# 灵矽接入与验收
 
-## 官方依据
+## 当前协议
 
-- [第三方业务系统接入](https://linx.qiniu.com/docs/xrobot/guide/third-app)
-- [云端 MCP](https://linx.qiniu.com/docs/xrobot/mcp/software-mcp)
-- [MCP 服务与 Agent 绑定](https://linx.qiniu.com/docs/xrobot/guide/mcp-store)
-- [客户端 demo](https://linx.qiniu.com/docs/xrobot/guide/client-demo)
-- [自定义 LLM 配置](https://linx.qiniu.com/docs/xrobot/api/llm)
+**云端 MCP 仅支持 Streamable HTTP，不再提供旧版 HTTP+SSE。**
 
-实现参考官方文档仓库 `qiniu/Xrobot-docs`，读取时 HEAD 为 `20ce1b29a1bdff575a4c3317689bae30a7e08535`。文档及平台实现可能变化；以下接口已用本地模拟请求验证，但不表示已完成平台实测。
+- MCP URL：`https://placid.cyou/mcp`
+- 传输协议：**Streamable HTTP**
+- 认证模式：**Normal**（当前灵矽控制台选项）
+- HTTP 认证：`Authorization: Bearer <LINX_SERVICE_TOKEN>`
+- 使用官方 MCP SDK；每个 POST 使用无状态 transport，游戏进度由 SQLite 维护。
+- GET / DELETE `/mcp` 返回 405，这是该无状态实现的正常行为；旧 `/mcp/message` 已删除。
+- 初始化、工具发现、工具调用、通知都发送到同一个 `/mcp`，响应为标准 MCP JSON。
 
-## 前置条件
+官方文档仍有旧 SSE 示例，但当前控制台只提供 Streamable HTTP，因此服务实现以实际控制台协议为准。不要照抄旧 SSE 注册模板，也不要猜测未验证的 REST 配置类型值。
 
-1. 可用的灵矽账号、Agent，以及语音终端。无需专用硬件：使用本仓库 [Mac/Linux 终端](../clients/lingxi/README.md)，运行 `npm run voice:activate` 后把绑定码添加到现有 Agent，再运行 `npm run voice:start`。
-2. 可被灵矽平台访问的 HTTPS 地址。不能填写 localhost。
-3. 设置服务端 `LINX_SERVICE_TOKEN`，在平台侧配置相同的 `Authorization: Bearer ...`。使用高强度随机值，不要提交到仓库。
-4. 对外部署设置 `PUBLIC_ORIGIN`，反向代理禁止缓存和缓冲 SSE。
+域名依赖本机 3000 端口服务和 frp 持续在线，源码仓库地址不是 MCP 服务地址。
 
-初版没有创建/修改平台资源。后续已由仓库内终端通过真实 OTA 获取本地虚拟设备绑定码，但没有管理账号凭据，没有自动绑定或修改 Agent。
+## 1. 配置云端 MCP
 
-## 方式 A：第三方业务模式（推荐先验证）
+1. 在 https://xrobo.qiniu.com/ 的 MCP 管理中创建/编辑私有服务。
+2. 协议选 **Streamable HTTP**，认证选 **Normal**，地址填 `https://placid.cyou/mcp`。
+3. 在自定义请求头/Header 中设置 `Authorization`，值为 `Bearer ` 加本机 `.env` 中的 `LINX_SERVICE_TOKEN`；Bearer 后有一个空格。
+4. Normal 是平台的认证模式名称，不表示无需认证。如果页面没有 Header 配置项，需要根据实际页面确认填写入口，不能直接移除服务端认证。
+5. 保存/更新后查询工具，应发现 `mystery_catalog` 和 `mystery_turn`。
+6. 开通服务并绑定到游戏 Agent。注意 REST 的 Agent MCP 更新为全量替换，不能覆盖已有绑定。
 
-链路：设备语音 → 灵矽 ASR → 本服务 → 固定事实/判题 → 灵矽 TTS → 设备。
+服务令牌、灵矽账号管理 token、虚拟设备 WebSocket token 是三种不同凭据。这里只使用游戏服务的 `LINX_SERVICE_TOKEN`。不要将它放入 URL，也不要提交到 GitHub。
 
-- 回调：`POST https://你的域名/api/chat/stream`
-- 请求头：`Authorization: Bearer <服务令牌>`、`Content-Type: application/json`
-- 输入格式：
-
-```json
-{
-  "auth": { "device_id": "device001" },
-  "type": "chat",
-  "details": { "msg": "开始游戏", "session_id": "session001" }
-}
-```
-
-返回 `text/event-stream`：
-
-```text
-data: {"event":"message","type":"chat","session_id":"session001","details":{"answer":"欢迎来到谜声……"}}
-
-data: {"event":"message_end","session_id":"session001"}
-
-```
-
-所有 SSE 消息原样返回 session_id。不指定 TTS 供应商和音色，由平台 Agent 配置决定。暂不支持 report/get/reset 透传操作。
-
-平台文档描述了业务回调协议，但未充分给出当前控制台配置入口或可直接执行的完整注册 payload。需要在控制台/平台侧确认**第三方业务服务**的启用方式；不要把这个端点直接当成 OpenAI `/chat/completions`，两者协议不同。如果该入口暂不可用，使用下面的 MCP 方式。
-
-本地协议检查（先在环境中设置测试用服务令牌并启动服务）：
+本仓库提供公开地址工具发现检查：
 
 ```bash
-curl -N http://localhost:3210/api/chat/stream \
-  -H "Authorization: Bearer $LINX_SERVICE_TOKEN" \
-  -H 'Content-Type: application/json' \
-  -d '{"auth":{"device_id":"test-device"},"type":"chat","details":{"msg":"开始游戏","session_id":"test-session"}}'
+npm run mcp:check
 ```
 
-`.env` 不会自动导出到当前 shell；运行 curl 前需在 shell 中设置同一个令牌。
+命令从本地 `.env` 读取服务令牌，不打印凭据，不调用游戏工具。也可通过环境变量设置 PUBLIC_ORIGIN 检查其他部署。
 
-## 方式 B：云端 MCP
+## 2. Agent 配置
 
-### 服务配置
+- 昵称建议“谜声”，替换默认“嘟嘟熊”角色。
+- 技能/意图识别选择支持工具调用的模式，例如 Function Call；聊天模型必须支持工具调用，不能选择“无意图识别”。
+- 勾选已开通的谜声云端 MCP。
+- 替换角色提示词，保存**整页配置**，结束旧会话后重新连接。
 
-- SSE URL：`https://你的域名/mcp`
-- 消息端点：`POST /mcp/message?sessionId=...`（由 SSE endpoint 事件协商，不能手填自定义地址）
-- SSE GET 和后续 POST 都需要服务令牌。
-- 不把 `api_key` 放进 URL，避免被访问日志记录。
-
-在灵矽 MCP 管理创建私有服务，开通后勾选绑定到游戏 Agent。技能配置需选择支持工具调用的意图识别模式（例如 Function Call），并使用支持工具调用的聊天模型；不能选择“无意图识别”。修改后保存整页 Agent 配置，再重新连接语音终端。
-
-当前 frp 部署的 SSE URL 为 `https://placid.cyou/mcp`，已通过公网官方 MCP 客户端测试；依赖本机服务和 frp 持续在线。控制台如要求配置模板，可使用如下结构，替换域名和令牌：
-
-```json
-{
-  "types": ["sse"],
-  "sse": {
-    "type": 0,
-    "url": "https://你的域名/mcp",
-    "shared_key": false,
-    "params": {},
-    "header": { "Authorization": "Bearer <服务令牌>" }
-  }
-}
-```
-
-平台 REST 注册接口见官方文档。Agent 的 MCP 更新接口是**全量替换**，不能直接覆盖已有绑定。首版不提供自动注册脚本，以免误改现有 Agent。
-
-### 设备标识
-
-游戏调用需要平台传入：
-
-- `X-Linx-Device-Id`
-- `X-Linx-Session-Id`
-- `X-Linx-Agent-Id`（如果有）
-
-这些不是模型工具参数。优先读取工具调用 POST 的请求头，必要时使用 SSE 握手时的同名请求头。握手已有身份时，拒绝后续身份变化；没有身份时仍可发现工具，但不能创建游戏。服务令牌只应交给可信平台，不能发给终端玩家；设备请求头本身不是密码学身份凭据。
-
-MCP 游戏进度按 device + agent + session 隔离。第三方业务模式没有 agent 维度，因此两种模式不会共享游戏进度。
-
-### Agent 提示词
+建议提示词：
 
 ```text
 你是“谜声”语音推理游戏的传声筒，语气温和、清晰、简洁。
@@ -112,39 +55,69 @@ MCP 游戏进度按 device + agent + session 隔离。第三方业务模式没�
 工具报错时说明暂时无法继续，不自行接管游戏主持。
 ```
 
-模型不一定严格遵循提示词，需要真机验收工具调用率和逐字播报行为。若模型跳过工具，优先使用方式 A。
+## 3. 不用专用硬件
 
-## 查询不到 MCP 工具时
+使用同仓库的 [Mac/Linux 语音终端](../clients/lingxi/README.md)：
 
-先检查：类型必须为 SSE，地址为 `https://placid.cyou/mcp`（不是网页首页或 `/mcp/message`）；Header 名为 `Authorization`，值为 `Bearer ` 加服务令牌（Bearer 后有一个空格）。令牌来源是本机游戏服务 `.env` 的 `LINX_SERVICE_TOKEN`，不是灵矽账号 token，也不是设备 WebSocket token。SSE GET 和后续消息 POST 都要带该 Header。
+```bash
+npm run voice:setup
+npm run voice:activate # 首次获取绑定码，添加到现有 Agent
+npm run voice:probe    # WSS 握手，无录音
+npm run voice:smoke    # macOS 合成语音验证 ASR/TTS 与游戏题面，无麦克风
+npm run voice:start    # 真实录音：回车开始，再回车停止，q 退出
+```
 
-如果配置模板需要填写字段，请放到 `sse.header`，不要放在 URL Query 参数中。保存/更新 MCP 配置后再重新查询工具。
+设备已绑定后无需重复添加。设备绑定与 MCP 服务绑定是两件事，都要完成。
 
-服务端临时设置 `MCP_DIAGNOSTICS=1` 并重启，控制台会输出 `[mcp]` 日志：
+## 4. 设备身份与隔离
 
-- 无任何 received：请求没有抵达当前服务，检查地址、平台出口网络、DNS 和 frp。
-- `hasAuthorization=false`：平台没有传 Header。
-- `authValid=false` + 401：令牌或 Bearer 格式不匹配；不要临时关闭认证。
-- GET 成功但没有 initialize：SSE/消息端点协商或客户端连接失败。
-- initialize 成功但没有 tools/list：客户端初始化流程没有完成。
-- tools/list 已到达：再检查响应解析或平台具体报错；不能只凭 POST 202 就认定客户端收到工具列表。
+每次游戏工具调用，平台需发送：
 
-日志仅记录方法、已知路径、状态、耗时、RPC 方法及认证/身份是否存在，不记录实际令牌、设备 ID、会话 ID、查询串或工具参数。定位后将诊断关闭。
+- `X-Linx-Device-Id`
+- `X-Linx-Session-Id`
+- `X-Linx-Agent-Id`（如果有）
 
-## 真机验收清单（尚未执行）
+这些不是模型工具参数，从当前 HTTP POST 请求头读取，不使用 HTTP 初始化连接的身份兜底。工具发现不需要设备标识；创建/操作游戏必须有有效设备和会话 ID。
 
-- [ ] “开始游戏”能听到第一道题的完整题面。
-- [ ] “房主听力正常吗”收到固定事实回复，不生成额外背景。
-- [ ] “给我提示”逐次播报不同提示，第四次不增加计数。
-- [ ] “我的答案是房主听不见，门铃用闪光灯提醒”正确结算。
-- [ ] “下一关”切换第二题；未结束时要求确认。
-- [ ] “揭晓答案”先确认，“确认揭晓”后才结束。
-- [ ] 两台设备、两个 session 不串进度。
-- [ ] 断线重连后，同一 session 能继续；新 session 按设计重新开局。
-- [ ] 验证 TTS 开始延迟、长题面播报、打断、噪声误识别、超时恢复。
-- [ ] 如果启用语义路由，验证供应商响应格式与 8 秒超时降级。
+Streamable HTTP transport 不创建 MCP 传输会话，**但业务游戏仍有会话**，按 device + agent + `X-Linx-Session-Id` 隔离。新连接可继续同一业务会话，不同设备不会串进度。服务令牌只交给可信平台，身份头本身不是密码学身份凭据。
 
-## 后续两天建议
+## 5. 查询不到工具时
 
-1. 第 2 天：接平台账号和一个真实设备，完成上述清单；根据实际 ASR 扩展同义表达，测量端到端延迟。
-2. 第 3 天：补充高质量原创关卡、校正判题误判、长时间连续试玩、部署监控及数据清理；只有通过真机验收后才标记为灵矽成品。
+先检查 URL、Streamable HTTP、Normal 下的 Authorization 请求头，以及 Bearer 格式。保存后重新查询；不要在浏览器直接打开 `/mcp` 判断是否正常，GET 返回 405 是预期。
+
+临时设置 `MCP_DIAGNOSTICS=1` 并重启，服务端输出安全的 `[mcp]` 诊断：
+
+- 没有 received：请求未抵达服务，检查域名、平台出口网络和 frp。
+- `hasAuthorization=false`：平台未传认证头。
+- `authValid=false` + 401：令牌或格式不匹配。
+- POST /mcp initialize 成功但没有 tools/list：客户端没有完成初始化/工具查询。
+- tools/list 已到达：再检查实际响应及平台解析报错。
+- GET /mcp 405：正常；如果平台只 GET 不 POST，检查传输类型是否保存为 Streamable HTTP。
+- POST /mcp/message 404：仍有旧 SSE 客户端或缓存配置，更新为统一 `/mcp` 端点。
+
+日志不记录令牌、设备/会话 ID、查询串或工具参数。定位后关闭诊断。
+
+## 可选：第三方业务回调（不是 MCP）
+
+另保留 `POST /api/chat/stream`，按灵矽第三方业务协议接收 ASR 文本并返回 SSE 给平台做 TTS。它与 MCP 传输协议无关，不能把它填进 MCP URL 或当作 OpenAI `/chat/completions`。
+
+请求头仍为服务令牌；输入示例：
+
+```json
+{"auth":{"device_id":"test-device"},"type":"chat","details":{"msg":"开始游戏","session_id":"test-session"}}
+```
+
+返回的每条 SSE 都原样保留 session_id。第三方业务配置入口需要按平台实际能力确认，默认使用上面的 Streamable HTTP MCP 路径即可。
+
+## 验收状态
+
+已验证：本地引擎与 HTTP/MCP 测试、网页桌面/手机流程、虚拟设备 OTA 绑定、真实 WSS 握手、合成语音经真实平台 ASR/TTS 返回。
+
+待验证：当前平台 Streamable HTTP 配置后的工具发现、真实 Agent 调用谜声工具、端到端游戏语音流程、实际麦克风和扬声器。之前的默认“嘟嘟熊”回复只证明语音通道通，不表示游戏接入完成。
+
+官方依据：
+- https://linx.qiniu.com/docs/xrobot/mcp/software-mcp
+- https://linx.qiniu.com/docs/xrobot/guide/mcp-store
+- https://linx.qiniu.com/docs/xrobot/guide/third-app
+- https://linx.qiniu.com/docs/xrobot/platform/OTA
+- https://linx.qiniu.com/docs/xrobot/platform/websocket

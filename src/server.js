@@ -3,7 +3,7 @@ import { randomBytes, timingSafeEqual, createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { GameEngine, createSemanticRouter } from './engine.js';
 import { catalog } from './cases.js';
@@ -24,7 +24,7 @@ const equal = (a, b) => {
 export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = createSemanticRouter({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL }), publicOrigin = process.env.PUBLIC_ORIGIN, diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
   const app = express();
   const engine = new GameEngine(dbPath, semantic);
-  const connections = new Map();
+  const activeMcpServers = new Set();
   const buckets = new Map();
   const housekeeping = setInterval(() => { const now = Date.now(); for (const [key, b] of buckets) if (b.until < now) buckets.delete(key); }, 60000).unref();
   app.disable('x-powered-by');
@@ -33,7 +33,7 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
       const started = Date.now();
       const entry = {
         time: new Date().toISOString(), method: req.method,
-        path: ['/mcp', '/mcp/message'].includes(req.path) ? req.path : '/mcp/*',
+        path: req.path === '/mcp' ? '/mcp' : '/mcp/*',
         hasAuthorization: Boolean(req.get('authorization')),
         authValid: Boolean(token) && equal(req.get('authorization'), `Bearer ${token}`),
         hasDevice: Boolean(req.get('x-linx-device-id')),
@@ -92,11 +92,8 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
     res.end(`data: ${JSON.stringify({ event: 'message_end', session_id: session })}\n\n`);
   });
 
-  // 灵矽当前文档要求旧版 HTTP+SSE，不以 Streamable HTTP 代替。
-  app.get('/mcp', auth, async (req, res) => {
-    if (connections.size >= 100) return res.status(503).json({ error: '连接数已满' });
-    const transport = new SSEServerTransport('/mcp/message', res);
-    const initial = { device: req.get('x-linx-device-id'), agent: req.get('x-linx-agent-id'), session: req.get('x-linx-session-id') };
+  // 当前灵矽控制台使用 Streamable HTTP；每个请求独立 transport，游戏状态由数据库维护。
+  const createMcpServer = () => {
     const server = new McpServer({ name: 'misheng', version: '0.1.0' });
     server.registerTool('mystery_catalog', { description: '列出谜声的可玩谜题，不包含谜底。', inputSchema: {} }, async () => ({ content: [{ type: 'text', text: JSON.stringify(catalog()) }] }));
     server.registerTool('mystery_turn', {
@@ -105,27 +102,36 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
     }, async (args, extra) => {
       try {
         const headers = extra.requestInfo?.headers || {};
-        const device = headers['x-linx-device-id'] || initial.device;
-        const agent = headers['x-linx-agent-id'] || initial.agent;
-        const session = headers['x-linx-session-id'] || initial.session;
-        for (const [name, value] of Object.entries({ device, agent, session })) if (initial[name] && value !== initial[name]) throw new Error('连接身份不匹配');
+        const device = headers['x-linx-device-id'];
+        const agent = headers['x-linx-agent-id'];
+        const session = headers['x-linx-session-id'];
         const result = await engine.turn(identity(device, agent, session), turnSchema.parse(args));
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       } catch (e) { return { content: [{ type: 'text', text: e.message }], isError: true }; }
     });
-    connections.set(transport.sessionId, { transport, server, initial });
-    res.on('close', () => { connections.delete(transport.sessionId); });
-    await server.connect(transport);
-  });
-  app.post('/mcp/message', auth, async (req, res) => {
-    const connection = connections.get(req.query.sessionId);
-    if (!connection) return res.status(404).json({ error: 'MCP 连接不存在' });
-    for (const [name, initial] of Object.entries(connection.initial)) {
-      const current = req.get(`x-linx-${name}-id`);
-      if (initial && current && initial !== current) return res.status(403).json({ error: '连接身份不匹配' });
+    return server;
+  };
+  app.post('/mcp', auth, async (req, res) => {
+    if (activeMcpServers.size >= 100) return res.status(503).json({ error: '并发请求已满' });
+    const server = createMcpServer();
+    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
+    activeMcpServers.add(server);
+    res.once('close', () => {
+      void server.close().catch(() => {}).finally(() => activeMcpServers.delete(server));
+    });
+    try {
+      await server.connect(transport);
+      await transport.handleRequest(req, res, req.body);
+    } catch (error) {
+      await server.close();
+      activeMcpServers.delete(server);
+      throw error;
     }
-    await connection.transport.handlePostMessage(req, res, req.body);
   });
+  // 无服务器主动通知，按 Streamable HTTP 规范明确返回 405；不再支持旧 SSE。
+  app.all('/mcp', auth, (_req, res) => res.status(405).set('Allow', 'POST').json({
+    jsonrpc: '2.0', id: null, error: { code: -32000, message: 'Method not allowed; use Streamable HTTP POST /mcp' }
+  }));
   app.use(express.static(resolve(root, 'public')));
   app.use((err, _req, res, _next) => {
     if (res.headersSent) return res.end();
@@ -135,7 +141,7 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
     console.error('Request failed:', err.message);
     res.status(500).json({ error: '服务暂时不可用，请稍后重试' });
   });
-  return { app, engine, close: async () => { clearInterval(housekeeping); await Promise.all([...connections.values()].map(c => c.server.close())); engine.close(); } };
+  return { app, engine, close: async () => { clearInterval(housekeeping); await Promise.all([...activeMcpServers].map(server => server.close())); engine.close(); } };
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const runtime = createApp();
