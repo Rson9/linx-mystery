@@ -99,7 +99,7 @@ npm run voice:start -- --input-device 1 --output-device 2
 npm run voice:test
 ```
 
-已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、18 项测试、真实 OTA 绑定状态检查及已绑定设备的 WSS 握手。使用系统合成语音验证了真实灵矽 ASR 和 TTS 音频解码。Agent 配置完成后，合成语音已成功触发 mystery_turn 并返回《没有响的门铃》题面；服务端记录确认调用带有设备和会话标识。麦克风真实录音、扬声器实际播放及多轮通关仍需在交互式终端体验。
+已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、18 项测试、真实 OTA 绑定状态检查及已绑定设备的 WSS 握手。使用系统合成语音验证了真实灵矽 ASR 和 TTS 音频解码。Agent 配置完成后，合成语音已成功触发 mystery_turn 并返回《没有响的门铃》题面；服务端记录确认调用带有设备和会话标识。随后通过同一真实 WSS 会话完成六轮游戏：开局、两次提问、提示、85 分通关及换关，见 [实测记录](../../docs/playtest.md)。麦克风真实录音和扬声器实际播放仍需在交互式终端体验。
 
 协议依据：
 - https://linx.qiniu.com/docs/xrobot/platform/OTA

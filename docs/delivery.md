@@ -75,4 +75,4 @@
 - 增加 `voice:probe` 和 `voice:smoke`，语音终端测试扩展到 18 项，通过。
 - 当前实际回复仍是默认“嘟嘟熊”角色，没有游戏题面；Agent 的 MCP 绑定、Function Call 和角色配置仍需核对。麦克风真实录音、扬声器实际播放和游戏语音全流程尚未验收。
 - 实际控制台仅提供 Streamable HTTP / Normal。已将 MCP 改为无状态 Streamable HTTP POST /mcp，删除旧 SSE 和 /mcp/message。工具发现无需设备身份，每次游戏调用从当前 POST 读取设备身份；补充跨客户端状态恢复、设备隔离、GET/DELETE 405 及旧端点 404 测试。第三方业务回调 SSE 是独立协议，不受该迁移影响。
-- 平台认证和 Agent 配置修正后，真实语音开局链路已通过：macOS 合成“开始游戏” → 灵矽 ASR → mystery_turn → 《没有响的门铃》题面 → TTS 音频解码。日志确认 tools/call 200 且带设备/会话标识。多轮真实 Agent 通关、实际麦克风和扬声器仍待验收。
+- 平台认证和 Agent 配置修正后，真实语音开局链路已通过：macOS 合成“开始游戏” → 灵矽 ASR → mystery_turn → 《没有响的门铃》题面 → TTS 音频解码。日志确认 tools/call 200 且带设备/会话标识。随后完成真实 Agent 六轮游戏实测：开局、两次提问、提示、85 分通关和下一关，详见 playtest.md。实际麦克风和扬声器仍待验收。
