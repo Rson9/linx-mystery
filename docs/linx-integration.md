@@ -12,12 +12,12 @@
 
 ## 前置条件
 
-1. 可用的灵矽账号、Agent、已绑定并联网的设备；也可使用官方 Linux/macOS 音频客户端。
+1. 可用的灵矽账号、Agent，以及语音终端。无需专用硬件：使用本仓库 [Mac/Linux 终端](../clients/lingxi/README.md)，运行 `npm run voice:activate` 后把绑定码添加到现有 Agent，再运行 `npm run voice:start`。
 2. 可被灵矽平台访问的 HTTPS 地址。不能填写 localhost。
 3. 设置服务端 `LINX_SERVICE_TOKEN`，在平台侧配置相同的 `Authorization: Bearer ...`。使用高强度随机值，不要提交到仓库。
 4. 对外部署设置 `PUBLIC_ORIGIN`，反向代理禁止缓存和缓冲 SSE。
 
-本次没有创建/修改平台资源，也没有读取任何本机平台凭据。
+初版没有创建/修改平台资源。后续已由仓库内终端通过真实 OTA 获取本地虚拟设备绑定码，但没有管理账号凭据，没有自动绑定或修改 Agent。
 
 ## 方式 A：第三方业务模式（推荐先验证）
 
@@ -68,7 +68,9 @@ curl -N http://localhost:3210/api/chat/stream \
 - SSE GET 和后续 POST 都需要服务令牌。
 - 不把 `api_key` 放进 URL，避免被访问日志记录。
 
-在灵矽 MCP 管理创建私有服务，开通后勾选绑定到游戏 Agent。控制台如要求配置模板，可使用如下结构，替换域名和令牌：
+在灵矽 MCP 管理创建私有服务，开通后勾选绑定到游戏 Agent。技能配置需选择支持工具调用的意图识别模式（例如 Function Call），并使用支持工具调用的聊天模型；不能选择“无意图识别”。修改后保存整页 Agent 配置，再重新连接语音终端。
+
+当前 frp 部署的 SSE URL 为 `https://placid.cyou/mcp`，已通过公网官方 MCP 客户端测试；依赖本机服务和 frp 持续在线。控制台如要求配置模板，可使用如下结构，替换域名和令牌：
 
 ```json
 {

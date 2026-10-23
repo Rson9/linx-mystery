@@ -7,3 +7,7 @@ test-results/
 playwright-report/
 *.log
 .DS_Store
+.local/
+.venv-lingxi/
+__pycache__/
+*.pyc

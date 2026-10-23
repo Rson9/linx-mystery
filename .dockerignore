@@ -5,3 +5,6 @@ node_modules
 data
 test-results
 playwright-report
+.local
+.venv-lingxi
+__pycache__
