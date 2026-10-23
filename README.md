@@ -2,11 +2,12 @@
 
 面向灵矽的语音情境推理游戏。听题、提问、获得提示、提交推理、结算和下一关；单人可玩，多人可围坐参与，不是跑团。
 
-**当前公开试玩仍是规则模式。** 已通过真实灵矽六轮语音游戏实测；新的 AI 主持与语义判题已接入代码，但未配置真实模型、未通过质量评测，不能视作已经完成自由问答。
+**当前公开试玩仍是规则模式。** 已通过真实灵矽六轮语音游戏实测；新的 AI 主持与语义判题已接入代码，真实模型接口也已配置并运行评测，但大量请求超过 8 秒期限，尚未通过上线门槛，不能视作已经完成自由问答。
 
 - [竞赛版优先级与验收标准](docs/competition-roadmap.md)
 - [灵矽接入](docs/linx-integration.md)
 - [六轮真实平台实测](docs/playtest.md)
+- [真实模型评测与延迟阻塞](docs/host-evaluation.md)
 - [Mac/Linux 语音终端](clients/lingxi/README.md)
 
 ## 环境与启动
@@ -57,9 +58,9 @@ pnpm mcp:check
 
 服务令牌、灵矽管理账号 token、设备 token、模型 key 各自独立，不能互换。密钥只保存在服务端 `.env` 或部署环境。
 
-## AI 主持（P0，尚待真实模型评测）
+## AI 主持（P0，真实评测尚未达标）
 
-在 `.env` 配置 OpenAI-compatible 服务的 `LLM_BASE_URL`（/v1 地址）、`LLM_API_KEY`、`LLM_MODEL`，先保持 `AI_HOST_ENABLED=0`：
+在 `.env` 配置 OpenAI-compatible 服务的 `LLM_BASE_URL`（基础 /v1 或完整 /v1/chat/completions 地址均可）、`LLM_API_KEY`、`LLM_MODEL`，先保持 `AI_HOST_ENABLED=0`：
 
 ```bash
 pnpm eval:host
@@ -68,7 +69,9 @@ pnpm eval:host
 
 开发评测集覆盖 5 关、未知细节、否定、多问题、注入、错误因果和堆词判题。目标总体 ≥95%，安全样本 100%；开发集通过还需独立盲测，报告存入忽略的 `eval-results/`。门槛和排期见竞赛路线图。
 
-准备好后再设 `AI_HOST_ENABLED=1` 并重启：
+当前真实接口评测受超时阻塞，详见评测报告，不要直接打开 AI 模式。可选 `LLM_REASONING_EFFORT` 只在供应商支持时设置，留空使用供应商默认值；low 在本次试验中未证实改善。
+
+真实质量与延迟达标后再设 `AI_HOST_ENABLED=1` 并重启：
 
 - 读取固定真相，只输出是/否/无关/无法确定/澄清/拒答，不扩展整条事实。
 - 是/否需要合法内部证据，证据不发给玩家；合法证据 ID 不等于语义正确，仍需真实评测。

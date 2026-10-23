@@ -5,6 +5,25 @@ import { GameEngine } from '../src/engine.js';
 import { cases, catalog } from '../src/cases.js';
 import { hostExamples } from '../eval/host-cases.js';
 const c = cases[0];
+test('兼容 /v1 基础地址和完整 chat/completions 地址，不重复拼接', async () => {
+  for (const url of ['https://model.example/v1', 'https://model.example/v1/', 'https://model.example/v1/chat/completions', 'https://model.example/v1/chat/completions/']) {
+    let target;
+    const h = createAIHost({ url, key: 'x', model: 'm', fetchImpl: async input => {
+      target = input; return { ok: true, json: async () => ({ choices: [{ message: { content: '{"verdict":"unknown","evidenceIds":[]}' } }] }) };
+    } });
+    await h.ask(c, '房主多大？');
+    assert.equal(target, 'https://model.example/v1/chat/completions');
+  }
+});
+test('仅显式配置时传推理强度，并限制问答输出预算', async () => {
+  for (const effort of [undefined, 'low']) {
+    let body;
+    const h = createAIHost({ url: 'https://model.example/v1', key: 'x', model: 'm', reasoningEffort: effort, fetchImpl: async (_url, init) => {
+      body = JSON.parse(init.body); return { ok: true, json: async () => ({ choices: [{ message: { content: '{"verdict":"unknown","evidenceIds":[]}' } }] }) };
+    } });
+    await h.ask(c, '问题'); assert.equal(body.reasoning_effort, effort); assert.equal(body.max_tokens, 200);
+  }
+});
 const setup = (t, reply) => {
   let sent;
   const host = createAIHost({ url: 'https://model.example/v1', key: 'test-key', model: 'test-model', fetchImpl: async (_url, init) => {
