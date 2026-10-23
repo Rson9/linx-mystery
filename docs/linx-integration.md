@@ -113,7 +113,9 @@ Streamable HTTP transport 不创建 MCP 传输会话，**但业务游戏仍有�
 
 已验证：本地引擎与 HTTP/MCP 测试、网页桌面/手机流程、虚拟设备 OTA 绑定、真实 WSS 握手、合成语音经真实平台 ASR/TTS 返回。
 
-待验证：当前平台 Streamable HTTP 配置后的工具发现、真实 Agent 调用谜声工具、端到端游戏语音流程、实际麦克风和扬声器。之前的默认“嘟嘟熊”回复只证明语音通道通，不表示游戏接入完成。
+后续已验证：平台认证修正后成功获取工具列表；Agent 启用游戏 MCP 后，合成语音“开始游戏”经真实 ASR 触发 mystery_turn，返回《没有响的门铃》并完成 TTS 音频解码。服务端日志确认 tools/call HTTP 200，且存在有效认证、设备和会话标识。
+
+待验证：多轮提问、提示、通关、换关的真实 Agent 语音流程，以及实际麦克风采集、扬声器播放。合成语音开局成功不等于这些流程均已验收。
 
 官方依据：
 - https://linx.qiniu.com/docs/xrobot/mcp/software-mcp
