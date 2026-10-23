@@ -12,8 +12,8 @@ const run = (command, args, cwd = root) => {
   if (result.status !== 0) process.exit(result.status ?? 1);
 };
 const [mode, ...extra] = process.argv.slice(2);
-if (!['setup', 'activate', 'check', 'start', 'test'].includes(mode)) {
-  console.error('用法：node scripts/voice.mjs setup|activate|check|start|test'); process.exit(1);
+if (!['setup', 'activate', 'check', 'probe', 'smoke', 'start', 'test'].includes(mode)) {
+  console.error('用法：node scripts/voice.mjs setup|activate|check|probe|smoke|start|test'); process.exit(1);
 }
 if (mode === 'test') {
   run(existsSync(python) ? python : 'python3', ['-m', 'unittest', 'discover', '-s', 'tests', '-v'], clientDir);

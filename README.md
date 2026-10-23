@@ -25,12 +25,14 @@ brew install opus
 npm run voice:setup
 npm run voice:check       # 设备枚举与编解码自检，不录音
 npm run voice:activate    # 获取绑定码，在现有 Agent 中添加设备
+npm run voice:probe       # 验证真实 WSS 握手
+npm run voice:smoke       # 合成语音检查平台 ASR/TTS 和游戏题面，不录音
 npm run voice:start      # 回车开始录音，再次回车结束；q 退出
 ```
 
 需要 Python 3.9+。客户端通过灵矽 HTTPS OTA 获取绑定码和设备令牌，以 WSS 连接平台，录音、播报使用本机音频；不是浏览器语音。Agent 仍需绑定游戏云端 MCP。详见 [语音终端说明](clients/lingxi/README.md)。
 
-本机安装、Opus 自检、设备枚举及 OTA 获取绑定码已经验证；真实麦克风和绑定后语音链路待体验。
+本机安装、Opus 自检、设备枚举、OTA、绑定后 WSS 及合成语音 ASR/TTS 已验证。目前 Agent 仍回复默认角色，待配置游戏 MCP；真实麦克风录音和扬声器播放待体验。
 
 ## 当前交付
 
@@ -50,7 +52,7 @@ npm run voice:start      # 回车开始录音，再次回车结束；q 退出
 2. 回复采用“可以确认：固定事实”，而非承诺始终精确回答“是/否/无关”。某些问题会连带揭示一个相关事实。
 3. **判题仍是关键概念匹配**，支持有限同义表达，不理解任意复杂推理。含否定的答案保守不通过；请以明确肯定句提交。这不能防止关键词堆砌作弊，正式比赛需要升级语义判题和人工评估。
 4. 可选模型服务尚未使用真实供应商凭据验证。语义误路由仍可能选错事实，但不能生成新的事实或更改通关状态。
-5. 已通过 frp 验证 `https://placid.cyou` 的公网网页与 MCP 接入，并提供本机语音终端；仍未完成 Agent 配置与实际录音/ASR/TTS 联调。不包含嵌入式固件或内置 ASR / TTS。
+5. 已通过 frp 验证 `https://placid.cyou` 的公网网页与 MCP 接入，并提供本机语音终端；已验证合成语音经真实灵矽 ASR/TTS 返回，但仍未完成 Agent 游戏配置及实际麦克风/扬声器体验。不包含嵌入式固件或内置 ASR / TTS。
 6. 进度按会话隔离，灵矽新建 session 后不会继承上一个 session 的进度。网页清理 cookie 后无法恢复旧进度。
 
 ## 灵矽接入
@@ -70,7 +72,7 @@ npm start
 ```bash
 npm test          # 16 项引擎与 HTTP/MCP 集成测试
 npm run test:e2e  # Chrome：桌面 + 手机两个完整流程
-npm run voice:test # 14 项语音终端测试（原生 Opus 测试缺少库时跳过）
+npm run voice:test # 18 项语音终端测试（原生 Opus 测试缺少库时跳过）
 ```
 
 E2E 默认使用已安装的 Chrome。测试覆盖：开局、提问、提示、判题、换关、刷新恢复、揭晓二次确认、设备隔离、身份缺失拒绝、SSE session_id、官方 MCP 客户端工具发现/调用、跨站请求、认证和超限消息体。**不覆盖实际麦克风采集、浏览器厂商语音服务、灵矽 ASR/TTS 和真机。**

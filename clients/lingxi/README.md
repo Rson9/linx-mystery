@@ -45,6 +45,17 @@ npm run voice:activate
 
 终端不提供端侧工具，所以 hello 不声明端侧 MCP 支持。游戏工具由 Agent 配置的云端 MCP 提供。
 
+## 不用麦克风的联调诊断
+
+```bash
+npm run voice:probe  # 只验证真实 WSS 握手，不采集/播放音频
+npm run voice:smoke  # 用 macOS say 合成“开始游戏”，发送到灵矽并解码返回 TTS
+```
+
+`voice:smoke` 会访问真实平台、消耗少量语音资源；不打开麦克风、不播放扬声器。临时合成音频使用后自动清理，终端会显示识别及回复文字。
+
+退出码：0 = ASR/TTS 完整且收到已知谜题题面；1 = 语音链路未完整通过；2 = 设备未绑定；3 = 语音通过但没有谜声题面，优先检查 Agent 的 MCP 绑定、Function Call 和提示词。收到题面只是回复内容检查，不能替代服务端工具调用记录。
+
 ## 语音试玩
 
 ```bash
@@ -88,7 +99,7 @@ npm run voice:start -- --input-device 1 --output-device 2
 npm run voice:test
 ```
 
-已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、14 项测试，并通过真实 OTA 获取绑定码。尚未验证麦克风真实录音、已绑定设备 WSS 会话、灵矽 ASR/TTS 或 Agent 游戏联调；需要先完成设备绑定再在交互式终端体验。
+已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、18 项测试、真实 OTA 绑定状态检查及已绑定设备的 WSS 握手。使用系统合成语音验证了真实灵矽 ASR 和 TTS 音频解码。当前 Agent 仍返回默认“嘟嘟熊”角色，尚未进入谜声游戏，需要完成 Agent 的 MCP / 角色配置。麦克风真实录音和扬声器实际播放仍需在交互式终端体验。
 
 协议依据：
 - https://linx.qiniu.com/docs/xrobot/platform/OTA

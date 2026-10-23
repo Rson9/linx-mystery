@@ -228,6 +228,8 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument('--activate', action='store_true', help='获取绑定码或检查绑定状态，不打开麦克风')
     mode.add_argument('--check', action='store_true', help='本机音频和 Opus 自检，不访问平台、不录音')
+    mode.add_argument('--probe', action='store_true', help='真实 WSS 握手测试，不采集或播放音频')
+    mode.add_argument('--smoke', action='store_true', help='使用 macOS 系统合成语音测试 ASR/TTS，不打开麦克风')
     parser.add_argument('--input-device', type=int, help='输入设备编号，见 --check')
     parser.add_argument('--output-device', type=int, help='输出设备编号，见 --check')
     parser.add_argument('--state', default=str(DEFAULT_STATE), help='本地设备身份文件（不含令牌）')
@@ -244,7 +246,7 @@ def main():
     if args.activate:
         say('虚拟设备已绑定，可运行 npm run voice:start。设备 ID：' + identity['device_id'])
         return 0
-    if not sys.stdin.isatty():
+    if not (args.probe or args.smoke) and not sys.stdin.isatty():
         raise ValueError('语音会话需要交互式终端，请在终端运行 npm run voice:start')
     from websockets.sync.client import connect
     url, token = config
@@ -258,7 +260,13 @@ def main():
         if not isinstance(raw, str):
             raise ValueError('平台 hello 响应格式错误')
         response = json.loads(raw)
-        validate_hello(response)
+        rate = validate_hello(response)
+        if args.probe:
+            say(f'灵矽 WSS 握手通过：Opus / {rate}Hz，已分配会话：{bool(response.get("session_id"))}。未录音。')
+            return 0
+        if args.smoke:
+            from diagnostics import smoke
+            return smoke(ws, response.get('session_id', ''), rate, say)
         Terminal(ws, response, args.input_device, args.output_device).run()
     return 0
 
