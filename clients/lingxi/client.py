@@ -32,7 +32,7 @@ def show_activation(data, identity):
     if code:
         say('\n绑定码：' + code)
         say('打开 https://xrobo.qiniu.com/ → 现有 Agent → 添加设备，输入绑定码。')
-        say('绑定后重新运行 npm run voice:start。绑定码可能过期，过期时重新获取。')
+        say('绑定后重新运行 pnpm voice:start。绑定码可能过期，过期时重新获取。')
     else:
         say('平台尚未返回设备令牌或绑定码，请检查平台的设备接入状态。')
 
@@ -244,10 +244,10 @@ def main():
         show_activation(data, identity)
         return 2
     if args.activate:
-        say('虚拟设备已绑定，可运行 npm run voice:start。设备 ID：' + identity['device_id'])
+        say('虚拟设备已绑定，可运行 pnpm voice:start。设备 ID：' + identity['device_id'])
         return 0
     if not (args.probe or args.smoke) and not sys.stdin.isatty():
-        raise ValueError('语音会话需要交互式终端，请在终端运行 npm run voice:start')
+        raise ValueError('语音会话需要交互式终端，请在终端运行 pnpm voice:start')
     from websockets.sync.client import connect
     url, token = config
     headers = {'Authorization': 'Bearer ' + token, 'Device-Id': identity['device_id'],

@@ -5,7 +5,8 @@ import { resolve, dirname } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
-import { GameEngine, createSemanticRouter } from './engine.js';
+import { GameEngine } from './engine.js';
+import { createAIHost } from './host.js';
 import { catalog } from './cases.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -21,9 +22,10 @@ const equal = (a, b) => {
   return aa.length === bb.length && timingSafeEqual(aa, bb);
 };
 
-export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = createSemanticRouter({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL }), publicOrigin = process.env.PUBLIC_ORIGIN, diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = null, host = process.env.AI_HOST_ENABLED === '1' ? createAIHost({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL }) : null, publicOrigin = process.env.PUBLIC_ORIGIN, diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
   const app = express();
-  const engine = new GameEngine(dbPath, semantic);
+  if (process.env.AI_HOST_ENABLED === '1' && !host) throw new Error('AI_HOST_ENABLED=1 时必须配置模型地址、密钥和型号');
+  const engine = new GameEngine(dbPath, semantic, host);
   const activeMcpServers = new Set();
   const buckets = new Map();
   const housekeeping = setInterval(() => { const now = Date.now(); for (const [key, b] of buckets) if (b.until < now) buckets.delete(key); }, 60000).unref();
@@ -78,7 +80,7 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
     next();
   };
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
-  app.get('/api/catalog', (_req, res) => res.json({ cases: catalog(), semantic: Boolean(semantic), voice: 'browser-preview' }));
+  app.get('/api/catalog', (_req, res) => res.json({ cases: catalog(), semantic: Boolean(semantic || host), hostMode: host ? 'ai' : 'rules', voice: 'browser-preview' }));
   app.get('/api/state', browser, (req, res) => res.json({ state: engine.snapshot(engine.load(req.player)) }));
   app.post('/api/turn', browser, async (req, res) => res.json(await engine.turn(req.player, turnSchema.parse(req.body))));
 

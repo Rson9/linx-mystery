@@ -3,14 +3,16 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { cases } from './cases.js';
+import { UNAVAILABLE_TEXT } from './host.js';
 
 const clean = s => s.toLowerCase().replace(/[\s，。？！、,.?!：:]/g, '');
 export class GameEngine {
-  constructor(filename = ':memory:', semantic = null) {
+  constructor(filename = ':memory:', semantic = null, host = null) {
     if (filename !== ':memory:') mkdirSync(dirname(filename), { recursive: true });
     this.db = new DatabaseSync(filename);
     this.db.exec('PRAGMA journal_mode=WAL; CREATE TABLE IF NOT EXISTS games (owner TEXT PRIMARY KEY, state TEXT NOT NULL)');
     this.semantic = semantic;
+    this.host = host;
     this.pending = new Map();
   }
   load(owner) {
@@ -27,7 +29,7 @@ export class GameEngine {
       gameId: state.id, caseId: c.id, title: c.title, premise: c.premise, status: state.status,
       questions: state.questions, hintsUsed: state.hints, attempts: state.attempts, discovered: state.discovered.length,
       score: state.status === 'won' ? Math.max(0, 100 - state.hints * 15 - Math.max(0, state.questions - 5) * 2 - Math.max(0, state.attempts - 1) * 5) : null,
-      history: state.history, ...(state.status !== 'playing' ? { truth: c.truth } : {})
+      history: state.history, lastVerdict: state.lastVerdict ?? null, ...(state.status !== 'playing' ? { truth: c.truth } : {})
     };
   }
   // 串行化同一玩家的异步请求，避免同时提问覆盖计数。
@@ -77,26 +79,49 @@ export class GameEngine {
         state.status = 'revealed'; answer = `真相是：${c.truth} 说“下一关”继续挑战。`;
       } else if (action === 'solve') {
         if (!text.trim()) throw new Error('请先说出你的答案');
-        state.attempts++;
-        // 保守拒绝包含否定的关键词命中，避免“不是冰”被当作“结冰”。
-        const negative = /不是|并非|不可能|没有|没用|无关|不靠|不需要|不能|未|不对|不涉及/.test(q);
-        const matched = c.concepts.filter(group => group.some(k => q.includes(k))).length;
-        if (!negative && matched === c.concepts.length) {
-          state.status = 'won'; answer = `推理正确！${c.truth} 说“下一关”再来一局。`;
-        } else answer = matched > 0 && !negative ? '已经接近真相，但还缺少关键环节。请把原因和实现方式一起说出来。' : '还没有完整命中关键原因。换一种肯定、明确的说法，或再问一个问题吧。';
+        if (this.host) {
+          const result = await this.host.judge(c, text).catch(() => null);
+          if (!result) answer = UNAVAILABLE_TEXT;
+          else {
+            state.attempts++;
+            state.lastVerdict = result.correct ? 'correct' : 'incomplete';
+            if (result.correct) { state.status = 'won'; answer = `推理正确！${c.truth} 说“下一关”再来一局。`; }
+            else answer = result.covered > 0 ? '你已经解释了一部分，但关键因果还没完整连起来。请把原因和实现方式一起说出来。' : '这还不能完整解释题目。可以再问一个问题，或把你的推理说得更完整一些。';
+          }
+        } else {
+          state.attempts++;
+          // 离线规则模式只用于演示，正式 AI 主持不以关键词判题。
+          const negative = /不是|并非|不可能|没有|没用|无关|不靠|不需要|不能|未|不对|不涉及/.test(q);
+          const matched = c.concepts.filter(group => group.some(k => q.includes(k))).length;
+          if (!negative && matched === c.concepts.length) {
+            state.status = 'won'; answer = `推理正确！${c.truth} 说“下一关”再来一局。`;
+          } else answer = matched > 0 && !negative ? '已经接近真相，但还缺少关键环节。请把原因和实现方式一起说出来。' : '还没有完整命中关键原因。换一种肯定、明确的说法，或再问一个问题吧。';
+        }
       } else if (!text.trim()) throw new Error('请说出你的问题');
       else {
-        state.questions++;
-        const hits = c.facts.filter(f => [...f.yes, ...f.no].some(k => q.includes(k)));
-        let fact = hits.length === 1 ? hits[0] : null;
-        if (!fact && this.semantic) {
-          const id = await this.semantic(c, text).catch(() => null);
-          fact = c.facts.find(f => f.id === id) ?? null;
+        if (this.host) {
+          const result = await this.host.ask(c, text, state.history).catch(() => null);
+          if (!result) answer = UNAVAILABLE_TEXT;
+          else {
+            answer = result.answer;
+            state.lastVerdict = result.verdict;
+            if (['yes', 'no', 'irrelevant'].includes(result.verdict)) state.questions++;
+            // 这里只表示经过确认的来源数量，不向玩家发送内部证据或完整事实。
+            for (const id of result.evidenceIds) if (!state.discovered.includes(id)) state.discovered.push(id);
+          }
+        } else {
+          state.questions++;
+          const hits = c.facts.filter(f => [...f.yes, ...f.no].some(k => q.includes(k)));
+          let fact = hits.length === 1 ? hits[0] : null;
+          if (!fact && this.semantic) {
+            const id = await this.semantic(c, text).catch(() => null);
+            fact = c.facts.find(f => f.id === id) ?? null;
+          }
+          if (fact) {
+            answer = `可以确认：${fact.text}`;
+            if (!state.discovered.includes(fact.id)) state.discovered.push(fact.id);
+          } else answer = '这个问题我还不能可靠判断。请一次只问一件事，围绕题目里的人物、物品或环境提问；也可以说“给我提示”。';
         }
-        if (fact) {
-          answer = `可以确认：${fact.text}`;
-          if (!state.discovered.includes(fact.id)) state.discovered.push(fact.id);
-        } else answer = '这个问题我还不能可靠判断。请一次只问一件事，围绕题目里的人物、物品或环境提问；也可以说“给我提示”。';
       }
     }
     state.history.push({ role: 'user', text: text || ({ start: '开始游戏', hint: '给我提示', repeat: '重听题目', reveal: '揭晓答案' }[action] ?? action) }, { role: 'assistant', text: answer });

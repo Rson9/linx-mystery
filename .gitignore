@@ -9,5 +9,7 @@ playwright-report/
 .DS_Store
 .local/
 .venv-lingxi/
+.venv/
+eval-results/
 __pycache__/
 *.pyc

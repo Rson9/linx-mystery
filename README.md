@@ -1,84 +1,96 @@
 # 谜声 · MISHENG
 
-面向灵矽的轻量语音情境推理游戏。听题、提问、提示、提交答案、结算、下一关，不需要凑齐真人，也不是跑团。
+面向灵矽的语音情境推理游戏。听题、提问、获得提示、提交推理、结算和下一关；单人可玩，多人可围坐参与，不是跑团。
 
-## 快速试玩
+**当前公开试玩仍是规则模式。** 已通过真实灵矽六轮语音游戏实测；新的 AI 主持与语义判题已接入代码，但未配置真实模型、未通过质量评测，不能视作已经完成自由问答。
 
-推荐 Node.js 24+（最低 22.13）。
+- [竞赛版优先级与验收标准](docs/competition-roadmap.md)
+- [灵矽接入](docs/linx-integration.md)
+- [六轮真实平台实测](docs/playtest.md)
+- [Mac/Linux 语音终端](clients/lingxi/README.md)
+
+## 环境与启动
+
+Node.js 推荐 24+（最低 22.13），**pnpm 12.0.0**；Python 由 **uv** 管理，`.python-version` 选择 3.12，依赖锁在 `uv.lock`。
 
 ```bash
-npm ci
-npm start
-# http://localhost:3210
+pnpm install --frozen-lockfile
+pnpm start
+# http://localhost:3210；以 .env 的 PORT 为准
 ```
 
-无需灵矽账号或模型密钥即可体验规则版。选择谜题后可点击示例问题或输入文字；说/输入“我的答案是……”提交。支持“开始游戏”“给我提示”“重听题目”“揭晓答案”“确认揭晓”“下一关”“确认重开”。
+只有一份 Node 锁文件 `pnpm-lock.yaml`，不混用 npm/yarn。Python 使用 `pyproject.toml` + `uv.lock`，不手动 pip 安装。
 
-网页的麦克风与朗读使用浏览器 Speech API，不是灵矽语音链路。语音识别结果先填入输入框，检查后发送，避免误识别直接触发操作。Chrome 通常需要麦克风授权、可用的浏览器语音服务及 localhost / HTTPS；不支持时可用文字。浏览器语音服务可能将音频发送到浏览器厂商，请勿输入敏感信息。
+本地不填密钥即可体验 5 道规则关卡。题面不等于谜底，未结束的公共 API 不下发真相和评分规准。网页麦克风与朗读为浏览器 Speech API，**不经过灵矽**；识别结果先填入输入框，检查后发送。浏览器厂商可能处理音频，请勿输入敏感内容。
 
-## 不需要专用硬件：用 Mac 连接灵矽
-
-仓库内已包含独立语音终端，与游戏服务同一仓库，无需克隆其他客户端：
+## 不用专用硬件：Mac 连接真实灵矽
 
 ```bash
 brew install opus
-npm run voice:setup
-npm run voice:check       # 设备枚举与编解码自检，不录音
-npm run voice:activate    # 获取绑定码，在现有 Agent 中添加设备
-npm run voice:probe       # 验证真实 WSS 握手
-npm run voice:smoke       # 合成语音检查平台 ASR/TTS 和游戏题面，不录音
-npm run voice:start      # 回车开始录音，再次回车结束；q 退出
+pnpm voice:setup      # uv sync --locked；依赖放在 .venv，不改系统 Python
+pnpm voice:check      # 原生 Opus 和音频设备自检，不录音
+pnpm voice:activate   # 获取绑定码，添加到现有 Agent
+pnpm voice:probe      # 真实 WSS 握手，不录音
+pnpm voice:smoke      # 合成“开始游戏”检查 ASR/TTS，不打开麦克风
+pnpm voice:start      # 回车开始录音，再次回车结束；q 退出
 ```
 
-需要 Python 3.9+。客户端通过灵矽 HTTPS OTA 获取绑定码和设备令牌，以 WSS 连接平台，录音、播报使用本机音频；不是浏览器语音。Agent 仍需绑定游戏云端 MCP。详见 [语音终端说明](clients/lingxi/README.md)。
+状态文件 `.local/lingxi-device.json` 权限 0600，设备 token 只在内存中。Agent 需要配置游戏 MCP、支持工具调用的模型和角色提示词。详见终端文档。已完成的六轮实测使用合成语音，不代表实际麦克风、扬声器、噪声、打断和重连均已验收。
 
-本机安装、Opus 自检、设备枚举、OTA、绑定后 WSS 及合成语音 ASR/TTS 已验证。真实灵矽 Agent 已完成一局六轮实测：开局、提问、提示、通关（85 分）和换关，详见 [实测记录](docs/playtest.md)。真实麦克风录音、扬声器播放及复杂场景仍待体验。
+## MCP
 
-## 当前交付
+仅支持 **Streamable HTTP `POST /mcp`**，Normal 认证模式下配置：
 
-- 5 道谜题，桌面及手机布局。
-- 固定真相、审核事实库、三级提示、通关/揭晓结算、下一关。
-- 100 分起算；每个提示扣 15 分，超过 5 次的每次提问扣 2 分，首次之后每次提交答案扣 5 分，最低 0 分。揭晓不计分。
-- SQLite 持久化，网页按 HttpOnly cookie 隔离，灵矽按设备/智能体/会话隔离。
-- 第三方业务 `POST /api/chat/stream`，返回文档规定的 SSE。
-- 云端 MCP 仅提供 **Streamable HTTP `POST /mcp`**，认证选 Normal 并传入 Authorization；使用官方 SDK，无状态传输，游戏状态存入 SQLite。旧 SSE 已删除。
-- 可选 OpenAI-compatible 语义路由。模型只选事实编号，播报由服务端固定文本生成，异常自动退回规则。
+```text
+Authorization: Bearer <LINX_SERVICE_TOKEN>
+```
 
-## 玩法边界
+工具：`mystery_catalog`、`mystery_turn`。GET/DELETE `/mcp` 返回 405，旧 SSE 端点已删除。每次游戏调用需要平台自动传入设备/会话标识；查询工具不需要设备身份。
 
-这是可玩的首版，不是任意问题都能理解的开放推理主持人。
-
-1. **未配置模型时是关键词规则模式**，提问优先使用示例措辞；每次只问一个事实。没有匹配时明确说明不能可靠判断，不假装理解。
-2. 回复采用“可以确认：固定事实”，而非承诺始终精确回答“是/否/无关”。某些问题会连带揭示一个相关事实。
-3. **判题仍是关键概念匹配**，支持有限同义表达，不理解任意复杂推理。含否定的答案保守不通过；请以明确肯定句提交。这不能防止关键词堆砌作弊，正式比赛需要升级语义判题和人工评估。
-4. 可选模型服务尚未使用真实供应商凭据验证。语义误路由仍可能选错事实，但不能生成新的事实或更改通关状态。
-5. 已通过 frp 验证 `https://placid.cyou` 的公网网页与 MCP 接入，并提供本机语音终端；已验证合成语音经真实灵矽 ASR、Agent 游戏工具调用和 TTS 完成多轮通关；实际麦克风/扬声器体验仍待验收。不包含嵌入式固件或内置 ASR / TTS。
-6. 进度按会话隔离，灵矽新建 session 后不会继承上一个 session 的进度。网页清理 cookie 后无法恢复旧进度。
-
-## 灵矽接入
-
-见 [接入说明](docs/linx-integration.md)。两种方式任选一种；推荐先走第三方业务模式，避免模型决定是否调用游戏工具。
+部署实例 `https://placid.cyou/mcp` 依赖本机 3000 端口服务和 frp 持续在线。GitHub 仓库地址不是服务 URL。
 
 ```bash
-cp .env.example .env
-# 编辑 .env，设置 LINX_SERVICE_TOKEN；本地模型增强为可选项
-npm start
+cp .env.example .env  # 已有 .env 时不要覆盖
+# 配置 LINX_SERVICE_TOKEN、PUBLIC_ORIGIN 后启动服务
+pnpm mcp:check
 ```
 
-所有密钥留在服务端 `.env` 或部署环境，不进入网页，也不写入源码。服务令牌是平台回调凭据，不是终端玩家需要填写的密钥。
+服务令牌、灵矽管理账号 token、设备 token、模型 key 各自独立，不能互换。密钥只保存在服务端 `.env` 或部署环境。
+
+## AI 主持（P0，尚待真实模型评测）
+
+在 `.env` 配置 OpenAI-compatible 服务的 `LLM_BASE_URL`（/v1 地址）、`LLM_API_KEY`、`LLM_MODEL`，先保持 `AI_HOST_ENABLED=0`：
+
+```bash
+pnpm eval:host
+# 配置缺失退出 2，表示没有执行模型质量评测，而不是通过
+```
+
+开发评测集覆盖 5 关、未知细节、否定、多问题、注入、错误因果和堆词判题。目标总体 ≥95%，安全样本 100%；开发集通过还需独立盲测，报告存入忽略的 `eval-results/`。门槛和排期见竞赛路线图。
+
+准备好后再设 `AI_HOST_ENABLED=1` 并重启：
+
+- 读取固定真相，只输出是/否/无关/无法确定/澄清/拒答，不扩展整条事实。
+- 是/否需要合法内部证据，证据不发给玩家；合法证据 ID 不等于语义正确，仍需真实评测。
+- 按独立因果规准和玩家原文引文判题；状态机决定通关，模型不能直接修改状态。
+- 模型异常/超时/无效输出，不退回会剧透的关键词答案，不扣提问或提交次数。
+- 未记载细节、澄清和安全拒答不扣提问次数。
+- AI 不可用时提示、重听等确定性操作仍可用。
+
+不开启 AI 时仍是旧规则演示：只做有限关键词匹配，可能连带泄露关键事实；判题可能误拒复杂正确表达或被堆词绕过，不适合竞技。新模型测试中的 mock 只验证程序约束，不证明真实模型的理解/抗注入能力。
 
 ## 测试
 
 ```bash
-npm test          # 19 项引擎与 HTTP/MCP 集成测试
-npm run test:e2e  # Chrome：桌面 + 手机两个完整流程
-npm run voice:test # 18 项语音终端测试（原生 Opus 测试缺少库时跳过）
-npm run mcp:check # 使用本地 .env 通过 Streamable HTTP 查询部署服务的工具列表
+pnpm test          # 引擎、主持结构校验、HTTP/MCP 集成
+pnpm test:e2e      # 已安装 Chrome 的桌面/手机完整流程
+pnpm voice:test    # uv 下的 Python 测试，含本机 libopus 编解码
+pnpm eval:host     # 配置真实模型后运行，可能产生 API 费用
 ```
 
-E2E 默认使用已安装的 Chrome。测试覆盖：开局、提问、提示、判题、换关、刷新恢复、揭晓二次确认、设备隔离、身份缺失拒绝、SSE session_id、官方 MCP 客户端工具发现/调用、跨站请求、认证和超限消息体。**不覆盖实际麦克风采集、浏览器厂商语音服务、灵矽 ASR/TTS 和真机。**
+依赖锁文件可复现安装。缺少 libopus 时 Python 原生编解码测试会跳过，不等于本机音频已通过。真实平台语音诊断会消耗少量平台资源。
 
-## 部署
+## 部署与边界
 
 ```bash
 docker build -t linx-mystery .
@@ -87,20 +99,23 @@ docker run --rm -p 127.0.0.1:3210:3210 --env-file .env \
   -v misheng-data:/app/data linx-mystery
 ```
 
-Docker 构建及镜像运行尚未实测。对外使用反向代理提供 HTTPS，设置 `PUBLIC_ORIGIN=https://你的域名`，对 SSE 关闭缓冲、延长读取超时。不直接暴露未加 TLS 的 Node 端口。服务默认只监听本机。
+Dockerfile 使用 pnpm frozen lockfile，镜像构建/运行尚未实测。对外由反向代理提供 HTTPS，设置准确的 `PUBLIC_ORIGIN`。服务默认只监听本机，平台端点未设置令牌时关闭。
 
-初版仅适合单实例小规模试用。限流按直连 IP 统计，反向代理后会聚合为代理 IP；正式上线需配置可信代理、网关级限流、用户认证、数据保留/清理策略、监控及备份。SQLite 不支持多个应用副本共享写入。数据文件含提问文本和进度，不保存音频。
+另保留非 MCP 的第三方业务 `POST /api/chat/stream` SSE 回调，使用时需关闭代理缓冲。不能把它当作 MCP URL 或 OpenAI API。
 
-## 文件结构
+初版为单实例小流量：SQLite 持久化，基础直连 IP 限流；仍需正式部署保活、可信代理、数据清理、备份和监控。清理网页 cookie 后无法恢复原进度。数据库含文字和进度，不保存录音。
+
+## 代码
 
 ```text
-src/cases.js             服务端谜题、事实、提示与判题概念
-src/engine.js            状态机、持久化、可选语义路由
-src/server.js            网页 API、业务 SSE、MCP、认证
-public/                 无构建步骤的网页试玩
-clients/lingxi/          同仓库的 Mac/Linux 语音终端
-scripts/voice.mjs        终端依赖安装、绑定、自检与启动入口
-test/                   引擎与接口测试
-e2e/                    桌面/手机浏览器流程
-docs/                   接入与验收报告
+src/cases.js          固定谜题、审核事实、提示和评分规准（服务端）
+src/host.js           AI 裁判、输出与引用校验
+src/engine.js         状态、计分、持久化、规则与 AI 模式
+src/server.js         网页 API、Streamable HTTP MCP、认证
+public/               无构建步骤的网页试玩
+clients/lingxi/       同仓库 Python 音频终端
+scripts/              uv 启动器、MCP 检查、模型评测
+eval/                 人工标注的开发评测集（不是独立盲测）
+test/、e2e/           程序与网页回归
+docs/                 接入、实测、竞赛路线图
 ```

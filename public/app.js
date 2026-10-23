@@ -72,7 +72,7 @@ if (SpeechRecognition) {
 } else { $('mic').disabled = true; $('mic').title = '当前浏览器不支持语音识别，请使用文字试玩'; }
 try {
   const [data, saved] = await Promise.all([api('/api/catalog'), api('/api/state')]); catalog = data.cases; state = saved.state;
-  $('mode').textContent = data.semantic ? '固定事实 · 语义增强' : '固定事实 · 规则试玩';
+  $('mode').textContent = data.hostMode === 'ai' ? 'AI 主持 · 固定真相' : data.semantic ? '固定事实 · 语义增强' : '固定事实 · 规则试玩';
   for (const [i, c] of catalog.entries()) {
     const button = document.createElement('button'); button.className = 'case-card'; button.dataset.id = c.id;
     const top = document.createElement('div'); top.className = 'card-top';

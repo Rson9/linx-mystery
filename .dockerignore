@@ -7,4 +7,6 @@ test-results
 playwright-report
 .local
 .venv-lingxi
+.venv
+eval-results
 __pycache__

@@ -30,7 +30,7 @@
 本仓库提供公开地址工具发现检查：
 
 ```bash
-npm run mcp:check
+pnpm mcp:check
 ```
 
 命令从本地 `.env` 读取服务令牌，不打印凭据，不调用游戏工具。也可通过环境变量设置 PUBLIC_ORIGIN 检查其他部署。
@@ -60,11 +60,11 @@ npm run mcp:check
 使用同仓库的 [Mac/Linux 语音终端](../clients/lingxi/README.md)：
 
 ```bash
-npm run voice:setup
-npm run voice:activate # 首次获取绑定码，添加到现有 Agent
-npm run voice:probe    # WSS 握手，无录音
-npm run voice:smoke    # macOS 合成语音验证 ASR/TTS 与游戏题面，无麦克风
-npm run voice:start    # 真实录音：回车开始，再回车停止，q 退出
+pnpm voice:setup
+pnpm voice:activate # 首次获取绑定码，添加到现有 Agent
+pnpm voice:probe    # WSS 握手，无录音
+pnpm voice:smoke    # macOS 合成语音验证 ASR/TTS 与游戏题面，无麦克风
+pnpm voice:start    # 真实录音：回车开始，再回车停止，q 退出
 ```
 
 设备已绑定后无需重复添加。设备绑定与 MCP 服务绑定是两件事，都要完成。

@@ -2,6 +2,7 @@
   "name": "linx-mystery",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@12.0.0",
   "type": "module",
   "description": "谜声：可通过灵矽语音游玩的情境推理游戏",
   "engines": {
@@ -13,6 +14,7 @@
     "test": "node --test test/*.test.js",
     "test:e2e": "playwright test",
     "mcp:check": "node --env-file-if-exists=.env scripts/check-mcp.mjs",
+    "eval:host": "node --env-file-if-exists=.env scripts/eval-host.mjs",
     "voice:setup": "node scripts/voice.mjs setup",
     "voice:activate": "node scripts/voice.mjs activate",
     "voice:check": "node scripts/voice.mjs check",

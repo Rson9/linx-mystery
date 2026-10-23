@@ -6,23 +6,23 @@
 
 ## 一次性准备
 
-需要 Python 3.9+、Node.js，以及 libopus。Mac 推荐 Homebrew：
+需要 uv、Node.js、pnpm 和 libopus；uv 按仓库的 .python-version 管理 Python 3.12。Mac 推荐 Homebrew：
 
 ```bash
 cd linx-mystery
 brew install opus
-npm run voice:setup
-npm run voice:check
+pnpm voice:setup
+pnpm voice:check
 ```
 
-音频依赖装进本仓库的 `.venv-lingxi/`，不修改系统 Python。macOS 的 sounddevice wheel 自带 PortAudio；Linux 需要另行安装 `libportaudio2`、`libopus0` 和 Python venv 支持。Linux 没有在本次交付实机验证。
+音频依赖由 uv 按 pyproject.toml 和 uv.lock 装进本仓库的 `.venv/`，不修改系统 Python，不再使用 requirements.txt 或手动 pip。macOS 的 sounddevice wheel 自带 PortAudio；Linux 需要另行安装 `libportaudio2`、`libopus0` 和 Python venv 支持。Linux 没有在本次交付实机验证。
 
 `voice:check` 检查 Opus 并列出输入/输出设备，不开始录音，也不连接平台。
 
 ## 绑定现有 Agent
 
 ```bash
-npm run voice:activate
+pnpm voice:activate
 ```
 
 首次生成本机随机虚拟设备 ID，通过 HTTPS OTA 获取绑定码。在 https://xrobo.qiniu.com/ 打开现有 Agent，添加设备，输入绑定码。
@@ -48,8 +48,8 @@ npm run voice:activate
 ## 不用麦克风的联调诊断
 
 ```bash
-npm run voice:probe  # 只验证真实 WSS 握手，不采集/播放音频
-npm run voice:smoke  # 用 macOS say 合成“开始游戏”，发送到灵矽并解码返回 TTS
+pnpm voice:probe  # 只验证真实 WSS 握手，不采集/播放音频
+pnpm voice:smoke  # 用 macOS say 合成“开始游戏”，发送到灵矽并解码返回 TTS
 ```
 
 `voice:smoke` 会访问真实平台、消耗少量语音资源；不打开麦克风、不播放扬声器。临时合成音频使用后自动清理，终端会显示识别及回复文字。
@@ -59,7 +59,7 @@ npm run voice:smoke  # 用 macOS say 合成“开始游戏”，发送到灵矽�
 ## 语音试玩
 
 ```bash
-npm run voice:start
+pnpm voice:start
 ```
 
 - 按 **回车**：打断现有播报，打开麦克风，开始录音。
@@ -74,7 +74,7 @@ npm run voice:start
 指定音频设备（编号先通过 `voice:check` 查看，连接蓝牙设备后可能变化）：
 
 ```bash
-npm run voice:start -- --input-device 1 --output-device 2
+pnpm voice:start --input-device 1 --output-device 2
 ```
 
 ## 安全与恢复
@@ -96,7 +96,7 @@ npm run voice:start -- --input-device 1 --output-device 2
 - `tests/`：协议、安全约束、原生编解码、麦克风控制状态机测试。
 
 ```bash
-npm run voice:test
+pnpm voice:test
 ```
 
 已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、18 项测试、真实 OTA 绑定状态检查及已绑定设备的 WSS 握手。使用系统合成语音验证了真实灵矽 ASR 和 TTS 音频解码。Agent 配置完成后，合成语音已成功触发 mystery_turn 并返回《没有响的门铃》题面；服务端记录确认调用带有设备和会话标识。随后通过同一真实 WSS 会话完成六轮游戏：开局、两次提问、提示、85 分通关及换关，见 [实测记录](../../docs/playtest.md)。麦克风真实录音和扬声器实际播放仍需在交互式终端体验。
