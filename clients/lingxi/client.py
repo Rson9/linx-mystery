@@ -2,6 +2,7 @@
 """Mac/Linux 语音终端：OTA 绑定 → WSS → Opus → 本机音频。"""
 import argparse
 import json
+import logging
 import os
 import queue
 import select
@@ -230,6 +231,7 @@ def main():
     mode.add_argument('--check', action='store_true', help='本机音频和 Opus 自检，不访问平台、不录音')
     mode.add_argument('--probe', action='store_true', help='真实 WSS 握手测试，不采集或播放音频')
     mode.add_argument('--smoke', action='store_true', help='使用 macOS 系统合成语音测试 ASR/TTS，不打开麦克风')
+    mode.add_argument('--playtest', action='store_true', help='同一真实会话验证 Agent 主持、未知细节、防剧透和通关')
     parser.add_argument('--input-device', type=int, help='输入设备编号，见 --check')
     parser.add_argument('--output-device', type=int, help='输出设备编号，见 --check')
     parser.add_argument('--state', default=str(DEFAULT_STATE), help='本地设备身份文件（不含令牌）')
@@ -246,15 +248,19 @@ def main():
     if args.activate:
         say('虚拟设备已绑定，可运行 pnpm voice:start。设备 ID：' + identity['device_id'])
         return 0
-    if not (args.probe or args.smoke) and not sys.stdin.isatty():
+    if not (args.probe or args.smoke or args.playtest) and not sys.stdin.isatty():
         raise ValueError('语音会话需要交互式终端，请在终端运行 pnpm voice:start')
     from websockets.sync.client import connect
     url, token = config
     headers = {'Authorization': 'Bearer ' + token, 'Device-Id': identity['device_id'],
                'Client-Id': identity['client_id'], 'Protocol-Version': '1'}
     # token 仅驻留内存，不写入文件或日志；禁止明文 WS，使用系统 TLS 校验。
-    with connect(url, additional_headers=headers, open_timeout=15, close_timeout=3,
-                 max_size=1024 * 1024, max_queue=32, proxy=None) as ws:
+    ws_logger = logging.getLogger('misheng.websocket')
+    ws_logger.addHandler(logging.NullHandler())
+    ws_logger.propagate = False  # 对外只打印下方脱敏错误，不泄漏库内部连接元数据。
+    with connect(url, additional_headers=headers, open_timeout=15, close_timeout=5,
+                 ping_interval=20, ping_timeout=60, logger=ws_logger,
+                 max_size=1024 * 1024, max_queue=64, proxy=None) as ws:
         ws.send(json.dumps(hello()))
         raw = ws.recv(timeout=10)
         if not isinstance(raw, str):
@@ -267,6 +273,9 @@ def main():
         if args.smoke:
             from diagnostics import smoke
             return smoke(ws, response.get('session_id', ''), rate, say)
+        if args.playtest:
+            from playtest import playtest
+            return playtest(ws, response.get('session_id', ''), rate, say)
         Terminal(ws, response, args.input_device, args.output_device).run()
     return 0
 

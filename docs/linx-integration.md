@@ -22,7 +22,7 @@
 2. 协议选 **Streamable HTTP**，认证选 **Normal**，地址填 `https://placid.cyou/mcp`。
 3. 在自定义请求头/Header 中设置 `Authorization`，值为 `Bearer ` 加本机 `.env` 中的 `LINX_SERVICE_TOKEN`；Bearer 后有一个空格。
 4. Normal 是平台的认证模式名称，不表示无需认证。如果页面没有 Header 配置项，需要根据实际页面确认填写入口，不能直接移除服务端认证。
-5. 保存/更新后查询工具，应发现 `mystery_catalog` 和 `mystery_turn`。
+5. 保存/更新后查询工具，应发现 `mystery_catalog` 和 `mystery_turn`。开启 `LINX_AGENT_HOST_ENABLED=1` 时还应发现 `mystery_commit`，需要刷新平台工具列表。
 6. 开通服务并绑定到游戏 Agent。注意 REST 的 Agent MCP 更新为全量替换，不能覆盖已有绑定。
 
 服务令牌、灵矽账号管理 token、虚拟设备 WebSocket token 是三种不同凭据。这里只使用游戏服务的 `LINX_SERVICE_TOKEN`。不要将它放入 URL，也不要提交到 GitHub。
@@ -42,7 +42,9 @@ pnpm mcp:check
 - 勾选已开通的谜声云端 MCP。
 - 替换角色提示词，保存**整页配置**，结束旧会话后重新连接。
 
-建议提示词：
+**复用 Agent 主持模式**：使用 [agent-host-prompt.txt](agent-host-prompt.txt) 的完整提示词，并阅读 [配置与风险说明](agent-host.md)。当 requiresJudgment=true 时必须继续调用 mystery_commit，不能直接播报内部资料。
+
+下面仅是关闭 Agent 主持时的旧转述模式提示词，不适用于新模式：
 
 ```text
 你是“谜声”语音推理游戏的传声筒，语气温和、清晰、简洁。
@@ -64,6 +66,7 @@ pnpm voice:setup
 pnpm voice:activate # 首次获取绑定码，添加到现有 Agent
 pnpm voice:probe    # WSS 握手，无录音
 pnpm voice:smoke    # macOS 合成语音验证 ASR/TTS 与游戏题面，无麦克风
+pnpm voice:playtest # 同一真实会话九轮 Agent 主持检查，无麦克风/扬声器
 pnpm voice:start    # 真实录音：回车开始，再回车停止，q 退出
 ```
 
@@ -95,7 +98,7 @@ Streamable HTTP transport 不创建 MCP 传输会话，**但业务游戏仍有�
 - GET /mcp 405：正常；如果平台只 GET 不 POST，检查传输类型是否保存为 Streamable HTTP。
 - POST /mcp/message 404：仍有旧 SSE 客户端或缓存配置，更新为统一 `/mcp` 端点。
 
-日志不记录令牌、设备/会话 ID、查询串或工具参数。定位后关闭诊断。
+日志不记录令牌、设备/会话 ID、查询串或工具参数；Agent 模式可记录有限的提交结果、计数和分数以核对重试是否重复计分，不记录谜底和玩家原话。定位后关闭诊断。
 
 ## 可选：第三方业务回调（不是 MCP）
 
@@ -117,7 +120,9 @@ Streamable HTTP transport 不创建 MCP 传输会话，**但业务游戏仍有�
 
 后续已完成同一会话六轮真实平台语音实测：开局、两次事实提问、一次提示、正确提交答案（85 分）、切换下一题。服务端状态确认已通关，详见 [实测记录](playtest.md)。
 
-待验证：实际麦克风采集、扬声器播放、噪声/回声、打断、重连、其他关卡语音通关，以及揭晓和重开确认。
+后续 Agent 模式已在两个会话中分别跑通九轮开发冒烟，包含不同问法、未知细节、角色扮演套取结尾、语义判题与换关；不能据此宣称完整自由问答或安全认证。见 agent-host.md。
+
+待验证：独立盲测、更多攻击与错误答案、实际麦克风采集、扬声器播放、噪声/回声、打断、重连、其他关卡语音通关，以及揭晓和重开确认。
 
 官方依据：
 - https://linx.qiniu.com/docs/xrobot/mcp/software-mcp

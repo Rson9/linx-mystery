@@ -2,12 +2,13 @@
 
 面向灵矽的语音情境推理游戏。听题、提问、获得提示、提交推理、结算和下一关；单人可玩，多人可围坐参与，不是跑团。
 
-**当前公开试玩仍是规则模式。** 已通过真实灵矽六轮语音游戏实测；新的 AI 主持与语义判题已接入代码，真实模型接口也已配置并运行评测，但大量请求超过 8 秒期限，尚未通过上线门槛，不能视作已经完成自由问答。
+**网页仍是规则试玩；灵矽 MCP 可复用 Agent 模型主持（实验模式）。** 原规则模式通过六轮真实平台实测，新 Agent 模式已在两个会话中分别通过九步开发冒烟，包含未知细节、防剧透样本和语义答案。单独调用外部模型的备选路径仍受延迟阻塞，不能把这两条路径的状态混为一谈，也不能把冒烟通过当成独立盲测通过。
 
 - [竞赛版优先级与验收标准](docs/competition-roadmap.md)
 - [灵矽接入](docs/linx-integration.md)
 - [六轮真实平台实测](docs/playtest.md)
-- [真实模型评测与延迟阻塞](docs/host-evaluation.md)
+- [复用 Agent 模型的配置、协议与实测](docs/agent-host.md)
+- [独立模型评测与延迟阻塞](docs/host-evaluation.md)
 - [Mac/Linux 语音终端](clients/lingxi/README.md)
 
 ## 环境与启动
@@ -33,6 +34,7 @@ pnpm voice:check      # 原生 Opus 和音频设备自检，不录音
 pnpm voice:activate   # 获取绑定码，添加到现有 Agent
 pnpm voice:probe      # 真实 WSS 握手，不录音
 pnpm voice:smoke      # 合成“开始游戏”检查 ASR/TTS，不打开麦克风
+pnpm voice:playtest   # 同一会话九轮 Agent 主持冒烟，不使用麦克风/扬声器
 pnpm voice:start      # 回车开始录音，再次回车结束；q 退出
 ```
 
@@ -46,7 +48,7 @@ pnpm voice:start      # 回车开始录音，再次回车结束；q 退出
 Authorization: Bearer <LINX_SERVICE_TOKEN>
 ```
 
-工具：`mystery_catalog`、`mystery_turn`。GET/DELETE `/mcp` 返回 405，旧 SSE 端点已删除。每次游戏调用需要平台自动传入设备/会话标识；查询工具不需要设备身份。
+工具：`mystery_catalog`、`mystery_turn`；开启 Agent 主持后增加 `mystery_commit`。GET/DELETE `/mcp` 返回 405，旧 SSE 端点已删除。每次游戏调用需要平台自动传入设备/会话标识；查询工具不需要设备身份。
 
 部署实例 `https://placid.cyou/mcp` 依赖本机 3000 端口服务和 frp 持续在线。GitHub 仓库地址不是服务 URL。
 
@@ -58,7 +60,18 @@ pnpm mcp:check
 
 服务令牌、灵矽管理账号 token、设备 token、模型 key 各自独立，不能互换。密钥只保存在服务端 `.env` 或部署环境。
 
-## AI 主持（P0，真实评测尚未达标）
+## 首选：复用灵矽 Agent 模型
+
+```ini
+LINX_AGENT_HOST_ENABLED=1
+AI_HOST_ENABLED=0
+```
+
+MCP 在 turn 阶段提供内部主持资料，Agent 提交结构化 judgment，commit 阶段校验证据、玩家引文、请求版本并由状态机结算；这条路径不调用独立模型 API。平台需刷新工具并使用 [新提示词](docs/agent-host-prompt.txt)，操作见 Agent 主持文档。
+
+私有资料会进入 Agent/平台上下文，不是安全隔离字段；仍可能被模型泄露或错误判定。本轮一条攻击样本未泄露，不代表抗注入认证。网页不提供这份内部资料。
+
+## 可选：独立模型裁判（真实评测尚未达标）
 
 在 `.env` 配置 OpenAI-compatible 服务的 `LLM_BASE_URL`（基础 /v1 或完整 /v1/chat/completions 地址均可）、`LLM_API_KEY`、`LLM_MODEL`，先保持 `AI_HOST_ENABLED=0`：
 

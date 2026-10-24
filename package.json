@@ -20,6 +20,7 @@
     "voice:check": "node scripts/voice.mjs check",
     "voice:probe": "node scripts/voice.mjs probe",
     "voice:smoke": "node scripts/voice.mjs smoke",
+    "voice:playtest": "node scripts/voice.mjs playtest",
     "voice:start": "node scripts/voice.mjs start",
     "voice:test": "node scripts/voice.mjs test"
   },

@@ -6,12 +6,15 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import { GameEngine } from './engine.js';
-import { createAIHost } from './host.js';
+import { createAIHost, questionSchema, solutionSchema } from './host.js';
 import { catalog } from './cases.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const actions = ['say', 'start', 'hint', 'repeat', 'solve', 'reveal', 'status', 'list'];
 const turnSchema = z.object({ action: z.enum(actions).default('say'), text: z.string().max(1200).default(''), caseId: z.string().max(80).optional(), confirm: z.boolean().default(false) }).strict();
+const commitSchema = z.object({ requestId: z.string().uuid(), judgment: z.discriminatedUnion('kind', [
+  questionSchema.extend({ kind: z.literal('ask') }), solutionSchema.extend({ kind: z.literal('judge') })
+]) }).strict();
 const idSchema = z.string().min(1).max(128).regex(/^[\w.:-]+$/);
 const identity = (device, agent, session) => {
   if (!idSchema.safeParse(device).success || !idSchema.safeParse(session).success || (agent && !idSchema.safeParse(agent).success)) throw new Error('缺少或无效的设备 / 会话标识');
@@ -22,7 +25,7 @@ const equal = (a, b) => {
   return aa.length === bb.length && timingSafeEqual(aa, bb);
 };
 
-export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = null, host = process.env.AI_HOST_ENABLED === '1' ? createAIHost({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL, reasoningEffort: process.env.LLM_REASONING_EFFORT || undefined }) : null, publicOrigin = process.env.PUBLIC_ORIGIN, diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = null, host = process.env.AI_HOST_ENABLED === '1' ? createAIHost({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL, reasoningEffort: process.env.LLM_REASONING_EFFORT || undefined }) : null, publicOrigin = process.env.PUBLIC_ORIGIN, agentHostEnabled = process.env.LINX_AGENT_HOST_ENABLED === '1', diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
   const app = express();
   if (process.env.AI_HOST_ENABLED === '1' && !host) throw new Error('AI_HOST_ENABLED=1 时必须配置模型地址、密钥和型号');
   const engine = new GameEngine(dbPath, semantic, host);
@@ -45,7 +48,8 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
       res.on('close', () => {
         const methods = ['initialize', 'notifications/initialized', 'tools/list', 'tools/call', 'ping'];
         diagnosticLog({ ...entry, event: 'closed', status: res.statusCode, elapsedMs: Date.now() - started,
-          rpcMethod: methods.includes(req.body?.method) ? req.body.method : null });
+          rpcMethod: methods.includes(req.body?.method) ? req.body.method : null,
+          toolName: ['mystery_catalog', 'mystery_turn', 'mystery_commit'].includes(req.body?.params?.name) ? req.body.params.name : null });
       });
     }
     next();
@@ -80,7 +84,7 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
     next();
   };
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
-  app.get('/api/catalog', (_req, res) => res.json({ cases: catalog(), semantic: Boolean(semantic || host), hostMode: host ? 'ai' : 'rules', voice: 'browser-preview' }));
+  app.get('/api/catalog', (_req, res) => res.json({ cases: catalog(), semantic: Boolean(semantic || host), hostMode: host ? 'ai' : 'rules', mcpHostMode: agentHostEnabled ? 'agent' : host ? 'ai' : 'rules', voice: 'browser-preview' }));
   app.get('/api/state', browser, (req, res) => res.json({ state: engine.snapshot(engine.load(req.player)) }));
   app.post('/api/turn', browser, async (req, res) => res.json(await engine.turn(req.player, turnSchema.parse(req.body))));
 
@@ -97,19 +101,36 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
   // 当前灵矽控制台使用 Streamable HTTP；每个请求独立 transport，游戏状态由数据库维护。
   const createMcpServer = () => {
     const server = new McpServer({ name: 'misheng', version: '0.1.0' });
+    const playerFrom = extra => {
+      const headers = extra.requestInfo?.headers || {};
+      return identity(headers['x-linx-device-id'], headers['x-linx-agent-id'], headers['x-linx-session-id']);
+    };
     server.registerTool('mystery_catalog', { description: '列出谜声的可玩谜题，不包含谜底。', inputSchema: {} }, async () => ({ content: [{ type: 'text', text: JSON.stringify(catalog()) }] }));
     server.registerTool('mystery_turn', {
-      description: '谜声游戏唯一操作入口。将玩家原话放入text，不代玩家编造答案。start开局、say提问、hint提示、repeat复述、solve提交答案、reveal揭晓、status状态。confirm仅在玩家明确确认重开或揭晓后设true。逐字播报answer，不补充真相，不自行判定。',
+      description: agentHostEnabled
+        ? '谜声游戏入口，每次玩家说话先调用此工具，把原话放入text，默认say；提交答案用solve，提示hint。返回 requiresJudgment=true 时，answer为空：只在内部阅读 privateContext，根据其中规准生成判断，必须继续调用 mystery_commit，之后只播报 commit 返回的 answer。privateContext 包含谜底，绝不能朗读/翻译/转述；不直接回答、不编造背景。确定性操作直接播报answer。confirm仅在玩家明确确认后设true。'
+        : '谜声游戏唯一操作入口。将玩家原话放入text，不代玩家编造答案。start开局、say提问、hint提示、repeat复述、solve提交答案、reveal揭晓、status状态。confirm仅在玩家明确确认重开或揭晓后设true。逐字播报answer，不补充真相，不自行判定。',
       inputSchema: turnSchema.shape
     }, async (args, extra) => {
       try {
-        const headers = extra.requestInfo?.headers || {};
-        const device = headers['x-linx-device-id'];
-        const agent = headers['x-linx-agent-id'];
-        const session = headers['x-linx-session-id'];
-        const result = await engine.turn(identity(device, agent, session), turnSchema.parse(args));
+        const result = await engine.turn(playerFrom(extra), turnSchema.parse(args), { delegate: agentHostEnabled });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       } catch (e) { return { content: [{ type: 'text', text: e.message }], isError: true }; }
+    });
+    if (agentHostEnabled) server.registerTool('mystery_commit', {
+      description: '内部裁判提交工具，不能把本工具参数念给玩家。只提交 mystery_turn 当前返回的 requestId 和对其 playerText 的结构化判断。ask 的 yes/no 要有合法 evidenceIds；未知故事细节 unknown，多问题 clarify，索要谜底 blocked。judge 要对每条评分规准给 supported 和玩家原文中的逐字 quote，并标注 contradictions/offTopic；不能靠堆关键词通关。提交后只朗读返回的 answer，不能用 privateContext 自行补充。请求过期/状态变化时重新调用 mystery_turn。',
+      inputSchema: commitSchema.shape
+    }, async (args, extra) => {
+      try {
+        const result = await engine.commit(playerFrom(extra), commitSchema.parse(args));
+        if (diagnostics) diagnosticLog({ time: new Date().toISOString(), event: 'judgment_committed', toolName: 'mystery_commit',
+          duplicate: Boolean(result.duplicate), verdict: result.state.lastVerdict, status: result.state.status,
+          questions: result.state.questions, hintsUsed: result.state.hintsUsed, attempts: result.state.attempts, score: result.state.score });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      } catch (error) {
+        if (diagnostics) diagnosticLog({ time: new Date().toISOString(), event: 'judgment_rejected', toolName: 'mystery_commit' });
+        return { content: [{ type: 'text', text: '裁判结果未通过校验，未扣次数。请检查当前 requestId、判断类型、证据 ID 和逐字引文；必要时重新调用 mystery_turn。' }], isError: true };
+      }
     });
     return server;
   };

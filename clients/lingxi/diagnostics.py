@@ -10,13 +10,13 @@ import wave
 from protocol import control
 
 
-def synthetic_pcm():
+def synthetic_pcm(text='开始游戏'):
     if sys.platform != 'darwin':
         raise ValueError('自动语音测试当前使用 macOS say；其他系统请手动 voice:start')
     with tempfile.TemporaryDirectory(prefix='misheng-smoke-') as folder:
         path = Path(folder) / 'start.wav'
         result = subprocess.run(['say', '-v', 'Tingting', '--file-format=WAVE',
-                                 '--data-format=LEI16@16000', '-o', str(path), '开始游戏'],
+                                 '--data-format=LEI16@16000', '-o', str(path), text],
                                 capture_output=True, timeout=20)
         if result.returncode:
             raise ValueError('无法合成中文测试音频，请检查系统 Tingting 语音是否可用')

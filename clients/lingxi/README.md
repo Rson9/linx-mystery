@@ -40,8 +40,8 @@ pnpm voice:activate
 2. 示例部署地址为 `https://placid.cyou/mcp`（依赖对应电脑、游戏服务及 frp 持续在线）。
 3. 配置 `Authorization: Bearer <LINX_SERVICE_TOKEN>`；服务令牌在游戏服务 `.env`，不是设备 WebSocket token，两者不同。
 4. 启用支持工具调用的意图识别模式（例如 Function Call），聊天模型需要支持工具调用，不能选择“无意图识别”。
-5. 使用 [接入说明](../../docs/linx-integration.md) 中的 Agent 提示词，保存整页配置。
-6. 能发现 `mystery_catalog`、`mystery_turn` 后开始体验。
+5. 使用 [接入说明](../../docs/linx-integration.md) 中对应模式的提示词，保存整页配置。复用 Agent 模型时使用 [agent-host-prompt.txt](../../docs/agent-host-prompt.txt)。
+6. 能发现 `mystery_catalog`、`mystery_turn` 后开始体验；Agent 主持模式还必须刷新出 `mystery_commit`，见 [协议与实测](../../docs/agent-host.md)。
 
 终端不提供端侧工具，所以 hello 不声明端侧 MCP 支持。游戏工具由 Agent 配置的云端 MCP 提供。
 
@@ -50,11 +50,14 @@ pnpm voice:activate
 ```bash
 pnpm voice:probe  # 只验证真实 WSS 握手，不采集/播放音频
 pnpm voice:smoke  # 用 macOS say 合成“开始游戏”，发送到灵矽并解码返回 TTS
+pnpm voice:playtest # 同一会话九轮 Agent 主持开发冒烟，无麦克风/扬声器
 ```
 
 `voice:smoke` 会访问真实平台、消耗少量语音资源；不打开麦克风、不播放扬声器。临时合成音频使用后自动清理，终端会显示识别及回复文字。
 
 退出码：0 = ASR/TTS 完整且收到已知谜题题面；1 = 语音链路未完整通过；2 = 设备未绑定；3 = 语音通过但没有谜声题面，优先检查 Agent 的 MCP 绑定、Function Call 和提示词。收到题面只是回复内容检查，不能替代服务端工具调用记录。
+
+`voice:playtest` 会依次检查开局、自由问法、未知细节、防剧透样本、提示、语义答案和下一关，失败立即停止，报告保存到忽略的 `eval-results/`。它使用真实平台资源，不是独立盲测或抗注入认证；9/9 通过后仍需核对服务端 commit 记录。
 
 ## 语音试玩
 
@@ -82,6 +85,7 @@ pnpm voice:start --input-device 1 --output-device 2
 - 每次启动重新获取设备 token，仅保留在内存中，不存盘、不打印。
 - OTA 必须 HTTPS，且不跟随重定向；WebSocket 强制 WSS，使用系统证书校验。
 - 官方 OTA 可能返回 `ws://` 地址；终端升级为同主机 `wss://`，不允许明文降级。不支持 TLS 的自定义服务会连接失败。
+- ping 间隔 20 秒、pong 期限 60 秒，容忍较长播报；超时仍明确失败，不保证网络不会断。
 - 断线后停止会话，退出后重跑 `voice:start`。当前没有自动重连和跨 session 进度恢复。
 - 设备身份和麦克风录音不会提交到 Git；模型/平台返回的 STT 和 TTS 文字会显示在当前终端。
 - 如需自定义 OTA，可通过进程环境设置 `LINGXI_OTA_URL`，只接受 HTTPS，不要指向不可信服务。
@@ -99,7 +103,7 @@ pnpm voice:start --input-device 1 --output-device 2
 pnpm voice:test
 ```
 
-已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、18 项测试、真实 OTA 绑定状态检查及已绑定设备的 WSS 握手。使用系统合成语音验证了真实灵矽 ASR 和 TTS 音频解码。Agent 配置完成后，合成语音已成功触发 mystery_turn 并返回《没有响的门铃》题面；服务端记录确认调用带有设备和会话标识。随后通过同一真实 WSS 会话完成六轮游戏：开局、两次提问、提示、85 分通关及换关，见 [实测记录](../../docs/playtest.md)。麦克风真实录音和扬声器实际播放仍需在交互式终端体验。
+已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、21 项测试、真实 OTA 绑定状态检查及已绑定设备的 WSS 握手。使用系统合成语音验证了真实灵矽 ASR 和 TTS 音频解码。Agent 配置完成后，合成语音已成功触发 mystery_turn 并返回《没有响的门铃》题面；服务端记录确认调用带有设备和会话标识。随后通过同一真实 WSS 会话完成六轮游戏：开局、两次提问、提示、85 分通关及换关，见 [实测记录](../../docs/playtest.md)。Agent 主持模式也已在两个会话中分别完成九步开发冒烟，含未知细节、拒绝角色扮演剧透和语义判题；存在提交重试及最高 9.4 秒首音，详见 [Agent 主持实测](../../docs/agent-host.md)。麦克风真实录音和扬声器实际播放仍需在交互式终端体验。
 
 协议依据：
 - https://linx.qiniu.com/docs/xrobot/platform/OTA

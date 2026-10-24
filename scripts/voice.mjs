@@ -10,8 +10,8 @@ const run = (command, args, cwd = root) => {
 };
 const python = (args, cwd = root) => run('uv', ['run', '--project', root, '--locked', 'python', ...args], cwd);
 const [mode, ...extra] = process.argv.slice(2);
-if (!['setup', 'activate', 'check', 'probe', 'smoke', 'start', 'test'].includes(mode)) {
-  console.error('用法：node scripts/voice.mjs setup|activate|check|probe|smoke|start|test'); process.exit(1);
+if (!['setup', 'activate', 'check', 'probe', 'smoke', 'playtest', 'start', 'test'].includes(mode)) {
+  console.error('用法：node scripts/voice.mjs setup|activate|check|probe|smoke|playtest|start|test'); process.exit(1);
 }
 if (mode === 'test') {
   python(['-m', 'unittest', 'discover', '-s', resolve(clientDir, 'tests'), '-v']);

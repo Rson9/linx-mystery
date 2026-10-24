@@ -6,8 +6,8 @@ export const VERDICT_TEXT = Object.freeze({
   blocked: '我不能直接泄露谜底。你可以继续提问，或说“揭晓答案”并确认。'
 });
 export const UNAVAILABLE_TEXT = 'AI 主持暂时没有给出可靠判断，这次不计次数。请稍后重试，也可以使用提示或重听题目。';
-const questionSchema = z.object({ verdict: z.enum(Object.keys(VERDICT_TEXT)), evidenceIds: z.array(z.string().max(80)).max(8) }).strict();
-const solutionSchema = z.object({
+export const questionSchema = z.object({ verdict: z.enum(Object.keys(VERDICT_TEXT)), evidenceIds: z.array(z.string().max(80)).max(8) }).strict();
+export const solutionSchema = z.object({
   assessments: z.array(z.object({ criterionId: z.string().max(80), supported: z.boolean(), quote: z.string().max(1200) }).strict()).max(8),
   contradictions: z.boolean(), offTopic: z.boolean()
 }).strict();
