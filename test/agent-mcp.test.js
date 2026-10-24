@@ -30,10 +30,18 @@ test('真实 MCP 协议两阶段调用、重试与会话隔离，网页不提供
   await call(client, 'mystery_turn', { text: '开始游戏' });
   const p = await call(client, 'mystery_turn', { text: '他提前和快递员约好了吗？' });
   assert.equal(p.requiresJudgment, true); assert.ok(p.privateContext.truth);
+  const viewHeaders = { Authorization: 'Bearer test-secret', 'X-Linx-Device-Id': 'device-a', 'X-Linx-Session-Id': 'session-a' };
+  assert.equal((await fetch(`${base}/api/device/game`)).status, 401);
+  const view = await (await fetch(`${base}/api/device/game`, { headers: viewHeaders })).json();
+  assert.equal(view.judging, true); assert.equal(view.state.title, '没有响的门铃');
+  for (const key of ['truth', 'privateContext', 'solution', 'pendingJudgment']) assert.equal(view.state[key], undefined);
+  const isolated = await (await fetch(`${base}/api/device/game`, { headers: { ...viewHeaders, 'X-Linx-Device-Id': 'different-device' } })).json();
+  assert.equal(isolated.state, null);
   const args = { requestId: p.privateContext.requestId, judgment: { kind: 'ask', verdict: 'unknown', evidenceIds: [] } };
   const other = await connect('device-b'); assert.equal((await other.callTool({ name: 'mystery_commit', arguments: args })).isError, true);
   const r = await call(client, 'mystery_commit', args); assert.match(r.answer, /无法确定/); assert.equal(r.privateContext, undefined);
   assert.equal((await call(client, 'mystery_commit', args)).duplicate, true);
+  assert.equal((await (await fetch(`${base}/api/device/game`, { headers: viewHeaders })).json()).judging, false);
   const catalog = await (await fetch(`${base}/api/catalog`)).json();
   assert.equal(catalog.hostMode, 'rules'); assert.equal(catalog.mcpHostMode, 'agent');
   for (const item of catalog.cases) for (const key of ['truth', 'solution', 'facts', 'privateContext']) assert.equal(item[key], undefined);
@@ -48,6 +56,33 @@ test('工具提交拒绝额外文本字段；不知道 requestId 不能注入判
   const r = await client.callTool({ name: 'mystery_commit', arguments: { requestId: '3a78ee42-341d-4a69-8001-78067cd5ee5b',
     judgment: { kind: 'ask', verdict: 'yes', evidenceIds: ['truth'], answer: '私有文本' } } });
   assert.equal(r.isError, true);
+});
+test('桌宠同一次提示输入的工具重试不重复扣分，第二次真实输入仍可取下一提示', async t => {
+  const { base, connect } = await setup(t); const client = await connect();
+  const headers = { Authorization: 'Bearer test-secret', 'Content-Type': 'application/json', 'X-Linx-Device-Id': 'device-a', 'X-Linx-Session-Id': 'session-a' };
+  const register = async (inputId, text) => {
+    const r = await fetch(`${base}/api/device/input`, { method: 'POST', headers, body: JSON.stringify({ inputId, text }) });
+    assert.equal(r.status, 200);
+  };
+  await call(client, 'mystery_turn', { text: '开始游戏' });
+  await register('0b634f72-355f-442e-b5e5-47122fa990d6', '给我提示');
+  assert.equal((await call(client, 'mystery_turn', { action: 'hint' })).state.hintsUsed, 1);
+  const duplicate = await call(client, 'mystery_turn', { text: '给我提示。' });
+  assert.equal(duplicate.duplicateInput, true); assert.equal(duplicate.state.hintsUsed, 1);
+  assert.equal((await client.callTool({ name: 'mystery_turn', arguments: { text: '揭晓答案' } })).isError, true);
+  await register('e99b8f82-f340-4b02-b907-680249382745', '给我提示');
+  assert.equal((await call(client, 'mystery_turn', { action: 'hint' })).state.hintsUsed, 2);
+});
+test('新设备输入会让旧的异步裁判提交失效', async t => {
+  const { base, connect } = await setup(t); const client = await connect();
+  const headers = { Authorization: 'Bearer test-secret', 'Content-Type': 'application/json', 'X-Linx-Device-Id': 'device-a', 'X-Linx-Session-Id': 'session-a' };
+  const register = async (inputId, text) => fetch(`${base}/api/device/input`, { method: 'POST', headers, body: JSON.stringify({ inputId, text }) });
+  await call(client, 'mystery_turn', { text: '开始游戏' });
+  await register('10a23370-a6e8-4376-a85c-0c48051cefe4', '听力正常吗');
+  const p = await call(client, 'mystery_turn', { text: '听力正常吗' });
+  await register('9386b5c9-a60c-4f8e-8fee-b67ab9cf180b', '衣服是蓝色吗');
+  const stale = await client.callTool({ name: 'mystery_commit', arguments: { requestId: p.privateContext.requestId, judgment: { kind: 'ask', verdict: 'no', evidenceIds: ['hearing'] } } });
+  assert.equal(stale.isError, true);
 });
 test('关闭 Agent 模式时不暴露 commit 工具，旧规则流程不受影响', async t => {
   const { connect } = await setup(t, false); const client = await connect();

@@ -59,7 +59,9 @@ pnpm mcp:check
 
 ## 3. 不用专用硬件
 
-使用同仓库的 [Mac/Linux 语音终端](../clients/lingxi/README.md)：
+首选 [小矽桌宠窗口](pet.md)：运行 `pnpm pet`，打开 http://127.0.0.1:3212/，点击唤醒、说话或文字作答，不需要手动操作终端录音。桌宠端口只开放给本机，不要加入 frp；游戏的公网 MCP 地址仍保持不变。
+
+下面是保留的 [Mac/Linux CLI 语音终端](../clients/lingxi/README.md)，用于兼容和诊断：
 
 ```bash
 pnpm voice:setup

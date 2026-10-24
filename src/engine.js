@@ -14,6 +14,7 @@ export class GameEngine {
     this.semantic = semantic;
     this.host = host;
     this.pending = new Map();
+    this.inputCache = new Map();
   }
   load(owner) {
     const row = this.db.prepare('SELECT state FROM games WHERE owner=?').get(owner);
@@ -39,23 +40,33 @@ export class GameEngine {
     this.pending.set(owner, next);
     try { return await next; } finally { if (this.pending.get(owner) === next) this.pending.delete(owner); }
   }
-  turn(owner, input, { delegate = false } = {}) {
-    return this.runExclusive(owner, () => this.execute(owner, input, delegate));
+  turn(owner, input, { delegate = false, inputId = null } = {}) {
+    return this.runExclusive(owner, async () => {
+      const key = inputId && !['status', 'list'].includes(input?.action) ? JSON.stringify([owner, inputId]) : null;
+      const cached = key && this.inputCache.get(key);
+      if (cached && cached.expiresAt > Date.now()) return { ...structuredClone(cached.result), duplicateInput: true };
+      const result = await this.execute(owner, input, delegate, inputId);
+      if (key) {
+        this.inputCache.set(key, { result: structuredClone(result), expiresAt: Date.now() + 120000 });
+        if (this.inputCache.size > 512) this.inputCache.delete(this.inputCache.keys().next().value);
+      }
+      return result;
+    });
   }
-  finishTurn(owner, state, text, answer, action, receiptId = null) {
+  finishTurn(owner, state, text, answer, action, receiptId = null, receiptInputId = null) {
     state.revision = (state.revision ?? 0) + 1;
     delete state.pendingJudgment;
     state.history.push({ role: 'user', text: text || ({ start: '开始游戏', hint: '给我提示', repeat: '重听题目', reveal: '揭晓答案' }[action] ?? action) }, { role: 'assistant', text: answer });
     state.history = state.history.slice(-80);
-    if (receiptId) state.lastJudgmentReceipt = { requestId: receiptId, revision: state.revision, answer };
+    if (receiptId) state.lastJudgmentReceipt = { requestId: receiptId, revision: state.revision, answer, inputId: receiptInputId };
     this.save(owner, state);
     return { answer, state: this.snapshot(state) };
   }
-  prepareJudgment(owner, state, text, task) {
+  prepareJudgment(owner, state, text, task, inputId = null) {
     const c = cases.find(c => c.id === state.caseId);
     let pending = state.pendingJudgment;
-    if (!pending || pending.text !== text || pending.task !== task || pending.revision !== (state.revision ?? 0) || pending.expiresAt <= Date.now()) {
-      pending = { requestId: randomUUID(), gameId: state.id, revision: state.revision ?? 0, text, task, expiresAt: Date.now() + 300000 };
+    if (!pending || pending.text !== text || pending.task !== task || pending.inputId !== inputId || pending.revision !== (state.revision ?? 0) || pending.expiresAt <= Date.now()) {
+      pending = { requestId: randomUUID(), gameId: state.id, revision: state.revision ?? 0, text, task, inputId, expiresAt: Date.now() + 300000 };
       state.pendingJudgment = pending;
       this.save(owner, state);
     }
@@ -75,14 +86,14 @@ export class GameEngine {
       }
     };
   }
-  commit(owner, { requestId, judgment }) {
+  commit(owner, { requestId, judgment }, { inputId = null } = {}) {
     return this.runExclusive(owner, () => {
       const state = this.load(owner);
-      if (state?.lastJudgmentReceipt?.requestId === requestId && state.lastJudgmentReceipt.revision === state.revision) {
+      if (state?.lastJudgmentReceipt?.requestId === requestId && state.lastJudgmentReceipt.revision === state.revision && (!state.lastJudgmentReceipt.inputId || state.lastJudgmentReceipt.inputId === inputId)) {
         return { answer: state.lastJudgmentReceipt.answer, state: this.snapshot(state), duplicate: true };
       }
       const pending = state?.pendingJudgment;
-      if (!pending || pending.requestId !== requestId || state.status !== 'playing' || pending.gameId !== state.id || pending.revision !== (state.revision ?? 0) || pending.expiresAt <= Date.now()) throw new Error('判断请求不存在、已过期或游戏已变化，请重新调用 mystery_turn');
+      if (!pending || pending.requestId !== requestId || state.status !== 'playing' || pending.gameId !== state.id || pending.revision !== (state.revision ?? 0) || pending.expiresAt <= Date.now() || (pending.inputId && pending.inputId !== inputId)) throw new Error('判断请求不存在、已过期或游戏已变化，请重新调用 mystery_turn');
       const c = cases.find(c => c.id === state.caseId);
       if (!judgment || judgment.kind !== pending.task) throw new Error('判断类型不匹配');
       const { kind, ...raw } = judgment;
@@ -100,10 +111,10 @@ export class GameEngine {
         if (result.correct) { state.status = 'won'; answer = `推理正确！${c.truth} 说“下一关”再来一局。`; }
         else answer = result.covered > 0 ? '你已经解释了一部分，但关键因果还没完整连起来。请把原因和实现方式一起说出来。' : '这还不能完整解释题目。可以再问一个问题，或把你的推理说得更完整一些。';
       }
-      return this.finishTurn(owner, state, pending.text, answer, kind, requestId);
+      return this.finishTurn(owner, state, pending.text, answer, kind, requestId, pending.inputId);
     });
   }
-  async execute(owner, { action = 'say', text = '', caseId, confirm = false } = {}, delegate = false) {
+  async execute(owner, { action = 'say', text = '', caseId, confirm = false } = {}, delegate = false, inputId = null) {
     if (typeof owner !== 'string' || !owner || owner.length > 512) throw new Error('无效的玩家标识');
     if (typeof text !== 'string' || text.length > 1200) throw new Error('请将一句话控制在 1200 字以内');
     if (!['say', 'start', 'hint', 'repeat', 'solve', 'reveal', 'status', 'list'].includes(action)) throw new Error('不支持的游戏操作');
@@ -127,7 +138,7 @@ export class GameEngine {
         state.lastVerdict = 'blocked';
         return this.finishTurn(owner, state, text, VERDICT_TEXT.blocked, action);
       }
-      return this.prepareJudgment(owner, state, text, action === 'solve' ? 'judge' : 'ask');
+      return this.prepareJudgment(owner, state, text, action === 'solve' ? 'judge' : 'ask', inputId);
     }
     let answer;
     if (action === 'list') {
@@ -201,7 +212,7 @@ export class GameEngine {
     }
     return this.finishTurn(owner, state, text, answer, action);
   }
-  close() { this.db.close(); }
+  close() { this.inputCache.clear(); this.db.close(); }
 }
 
 // 可选语义路由：模型只选择已审核的事实编号，不能生成谜底、判定结果或播报文字。

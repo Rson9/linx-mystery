@@ -2,8 +2,11 @@
 
 面向灵矽的语音情境推理游戏。听题、提问、获得提示、提交推理、结算和下一关；单人可玩，多人可围坐参与，不是跑团。
 
-**网页仍是规则试玩；灵矽 MCP 可复用 Agent 模型主持（实验模式）。** 原规则模式通过六轮真实平台实测，新 Agent 模式已在两个会话中分别通过九步开发冒烟，包含未知细节、防剧透样本和语义答案。单独调用外部模型的备选路径仍受延迟阻塞，不能把这两条路径的状态混为一谈，也不能把冒烟通过当成独立盲测通过。
+**主入口已改为“小矽桌宠／虚拟硬件演示”。** 在桌面小窗里点击唤醒，听故事、开关麦克风、提问、获得提示并作答；可展开推理台查看真实对话、线索与分数。已通过真实浏览器链路的预录输入 → 灵矽 ASR / Agent / PCM TTS → 85 分结算与换题。
 
+原来的规则网页保留作备用。Agent 主持仍为实验模式，外部独立模型是另一条备选路线；有限冒烟通过不代表完整盲测或安全认证。
+
+- [桌宠玩法、真实验收与边界](docs/pet.md)
 - [竞赛版优先级与验收标准](docs/competition-roadmap.md)
 - [灵矽接入](docs/linx-integration.md)
 - [六轮真实平台实测](docs/playtest.md)
@@ -17,13 +20,20 @@ Node.js 推荐 24+（最低 22.13），**pnpm 12.0.0**；Python 由 **uv** 管�
 
 ```bash
 pnpm install --frozen-lockfile
-pnpm start
-# http://localhost:3210；以 .env 的 PORT 为准
+pnpm pet
+# 自动检查/复用游戏服务，打开独立 Chrome 桌宠窗口
+# 本机入口：http://127.0.0.1:3212/
 ```
+
+已有灵矽 Agent、MCP 和本机设备配置会沿用；新设备在窗口内获取真实绑定码。桌宠运行不需要 Python / libopus，uv/Python 终端保留作兼容和诊断。桌宠服务只绑定本机，**不要将 3212 加入 frp**；公网上的 `/pet/` 仅为外观预览。
+
+![真实灵矽通关后的推理台](docs/assets/pet-desktop.png)
+
+<img src="docs/assets/pet-compact.png" width="300" alt="小矽真实平台 85 分通关后的桌宠小窗">
 
 只有一份 Node 锁文件 `pnpm-lock.yaml`，不混用 npm/yarn。Python 使用 `pyproject.toml` + `uv.lock`，不手动 pip 安装。
 
-本地不填密钥即可体验 5 道规则关卡。题面不等于谜底，未结束的公共 API 不下发真相和评分规准。网页麦克风与朗读为浏览器 Speech API，**不经过灵矽**；识别结果先填入输入框，检查后发送。浏览器厂商可能处理音频，请勿输入敏感内容。
+运行 `pnpm start` 可打开原来的规则备用页面（端口以 .env 为准）。该旧页面不填密钥即可体验 5 道规则关卡。题面不等于谜底，未结束的公共 API 不下发真相和评分规准。网页麦克风与朗读为浏览器 Speech API，**不经过灵矽**；识别结果先填入输入框，检查后发送。浏览器厂商可能处理音频，请勿输入敏感内容。
 
 ## 不用专用硬件：Mac 连接真实灵矽
 
@@ -99,9 +109,10 @@ pnpm eval:host
 
 ```bash
 pnpm test          # 引擎、主持结构校验、HTTP/MCP 集成
-pnpm test:e2e      # 已安装 Chrome 的桌面/手机完整流程
+pnpm test:e2e      # 原网页 + 桌宠完整/小窗流程，使用模拟 Agent
 pnpm voice:test    # uv 下的 Python 测试，含本机 libopus 编解码
 pnpm eval:host     # 配置真实模型后运行，可能产生 API 费用
+pnpm pet:check --allow-platform # 真实桌宠界面验收，预录输入，不采集物理麦克风
 ```
 
 依赖锁文件可复现安装。缺少 libopus 时 Python 原生编解码测试会跳过，不等于本机音频已通过。真实平台语音诊断会消耗少量平台资源。
@@ -127,8 +138,11 @@ Dockerfile 使用 pnpm frozen lockfile，镜像构建/运行尚未实测。对�
 src/cases.js          固定谜题、审核事实、提示和评分规准（服务端）
 src/host.js           AI 裁判、输出与引用校验
 src/engine.js         状态、计分、持久化、规则与 AI 模式
-src/server.js         网页 API、Streamable HTTP MCP、认证
-public/               无构建步骤的网页试玩
+src/server.js         游戏 API、Streamable HTTP MCP、认证
+src/pet-server.js     本机语音桥，设备 token 不进入浏览器
+src/device-view.js    设备状态投影与实际输入登记
+public/pet/           桌宠界面、Web Audio / AudioWorklet PCM
+public/               保留的旧规则网页
 clients/lingxi/       同仓库 Python 音频终端
 scripts/              uv 启动器、MCP 检查、模型评测
 eval/                 人工标注的开发评测集（不是独立盲测）

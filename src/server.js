@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { GameEngine } from './engine.js';
 import { createAIHost, questionSchema, solutionSchema } from './host.js';
 import { catalog } from './cases.js';
+import { DeviceViews, normalizeUtterance } from './device-view.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const actions = ['say', 'start', 'hint', 'repeat', 'solve', 'reveal', 'status', 'list'];
@@ -30,8 +31,9 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
   if (process.env.AI_HOST_ENABLED === '1' && !host) throw new Error('AI_HOST_ENABLED=1 时必须配置模型地址、密钥和型号');
   const engine = new GameEngine(dbPath, semantic, host);
   const activeMcpServers = new Set();
+  const deviceViews = new DeviceViews();
   const buckets = new Map();
-  const housekeeping = setInterval(() => { const now = Date.now(); for (const [key, b] of buckets) if (b.until < now) buckets.delete(key); }, 60000).unref();
+  const housekeeping = setInterval(() => { const now = Date.now(); for (const [key, b] of buckets) if (b.until < now) buckets.delete(key); deviceViews.prune(); }, 60000).unref();
   app.disable('x-powered-by');
   app.use((req, res, next) => {
     if (diagnostics && req.path.startsWith('/mcp')) {
@@ -88,6 +90,27 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
   app.get('/api/state', browser, (req, res) => res.json({ state: engine.snapshot(engine.load(req.player)) }));
   app.post('/api/turn', browser, async (req, res) => res.json(await engine.turn(req.player, turnSchema.parse(req.body))));
 
+  // 本机桌宠登记实际输入，使 Agent 重试工具时不会重复扣提示或判题分。
+  app.post('/api/device/input', auth, (req, res) => {
+    const device = idSchema.parse(req.get('x-linx-device-id'));
+    const session = idSchema.parse(req.get('x-linx-session-id'));
+    const body = z.object({ inputId: z.string().uuid(), text: z.string().trim().min(1).max(1200) }).strict().parse(req.body);
+    try { deviceViews.setInput(device, session, body.inputId, body.text); }
+    catch { return res.status(409).json({ error: '同一输入凭据不能改写原话' }); }
+    res.json({ ok: true });
+  });
+
+  // 本机语音终端按设备/会话读取已认证 MCP 的公开视图，不返回主持资料。
+  app.get('/api/device/game', auth, (req, res) => {
+    const device = idSchema.parse(req.get('x-linx-device-id'));
+    const session = idSchema.parse(req.get('x-linx-session-id'));
+    let owner;
+    try { owner = deviceViews.lookup(device, session); }
+    catch { return res.status(409).json({ error: '设备会话不唯一，请重新连接' }); }
+    const state = owner ? engine.load(owner) : null;
+    res.json({ state: engine.snapshot(state), judging: Boolean(state?.status === 'playing' && state.pendingJudgment?.expiresAt > Date.now()) });
+  });
+
   // 第三方业务模式：请求和响应 session_id 原样对应。平台负责 ASR / TTS。
   app.post('/api/chat/stream', auth, async (req, res) => {
     const body = z.object({ auth: z.object({ device_id: idSchema }), type: z.literal('chat'), details: z.object({ msg: z.string().min(1).max(1200), session_id: idSchema }) }).parse(req.body);
@@ -103,7 +126,9 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
     const server = new McpServer({ name: 'misheng', version: '0.1.0' });
     const playerFrom = extra => {
       const headers = extra.requestInfo?.headers || {};
-      return identity(headers['x-linx-device-id'], headers['x-linx-agent-id'], headers['x-linx-session-id']);
+      const owner = identity(headers['x-linx-device-id'], headers['x-linx-agent-id'], headers['x-linx-session-id']);
+      deviceViews.remember(headers['x-linx-device-id'], headers['x-linx-session-id'], owner);
+      return owner;
     };
     server.registerTool('mystery_catalog', { description: '列出谜声的可玩谜题，不包含谜底。', inputSchema: {} }, async () => ({ content: [{ type: 'text', text: JSON.stringify(catalog()) }] }));
     server.registerTool('mystery_turn', {
@@ -113,7 +138,13 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
       inputSchema: turnSchema.shape
     }, async (args, extra) => {
       try {
-        const result = await engine.turn(playerFrom(extra), turnSchema.parse(args), { delegate: agentHostEnabled });
+        const owner = playerFrom(extra), input = turnSchema.parse(args), headers = extra.requestInfo.headers;
+        const receipt = deviceViews.currentInput(headers['x-linx-device-id'], headers['x-linx-session-id']);
+        if (receipt) {
+          if (input.text && normalizeUtterance(input.text) !== normalizeUtterance(receipt.text)) throw new Error('工具文本不是当前设备输入，请使用玩家原话');
+          input.text = receipt.text;
+        }
+        const result = await engine.turn(owner, input, { delegate: agentHostEnabled, inputId: receipt?.inputId });
         return { content: [{ type: 'text', text: JSON.stringify(result) }] };
       } catch (e) { return { content: [{ type: 'text', text: e.message }], isError: true }; }
     });
@@ -122,7 +153,9 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
       inputSchema: commitSchema.shape
     }, async (args, extra) => {
       try {
-        const result = await engine.commit(playerFrom(extra), commitSchema.parse(args));
+        const owner = playerFrom(extra), headers = extra.requestInfo.headers;
+        const receipt = deviceViews.currentInput(headers['x-linx-device-id'], headers['x-linx-session-id']);
+        const result = await engine.commit(owner, commitSchema.parse(args), { inputId: receipt?.inputId });
         if (diagnostics) diagnosticLog({ time: new Date().toISOString(), event: 'judgment_committed', toolName: 'mystery_commit',
           duplicate: Boolean(result.duplicate), verdict: result.state.lastVerdict, status: result.state.status,
           questions: result.state.questions, hintsUsed: result.state.hintsUsed, attempts: result.state.attempts, score: result.state.score });

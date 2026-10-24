@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#f4f5ef"><title>小矽 · 你的桌面推理搭档</title><link rel="stylesheet" href="./pet.css"><script type="module" src="./pet.js"></script></head>
+<body>
+<header class="topbar"><a class="brand" href="./"><span class="brand-icon">◒</span><span>谜声 <small>小矽的推理电台</small></span></a><div class="top-actions"><span id="connection" class="connection"><i></i><span>等待唤醒</span></span><button id="compact" class="icon-button" aria-label="切换桌宠小窗">▣</button><button id="mute" class="icon-button" aria-label="静音" aria-pressed="false">♫</button></div></header>
+<main class="desk">
+  <section class="companion">
+    <div class="section-kicker"><span>YOUR LITTLE THINKING PARTNER</span><span class="hardware-tag">虚拟硬件 · LX-01</span></div>
+    <div id="pet-device" class="pet-stage" data-mood="sleeping">
+      <span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><span class="spark spark-one">✦</span><span class="spark spark-two">✧</span><span class="stage-caption">不是所有答案，都在第一眼。</span>
+      <button id="pet-touch" class="pet-character" aria-label="摸摸小矽">
+        <svg viewBox="0 0 340 350" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <defs><linearGradient id="body" x1="90" y1="65" x2="265" y2="280" gradientUnits="userSpaceOnUse"><stop stop-color="#E3F9E4"/><stop offset=".5" stop-color="#B4DCC7"/><stop offset="1" stop-color="#82B8A3"/></linearGradient><linearGradient id="glass" x1="100" y1="120" x2="230" y2="210" gradientUnits="userSpaceOnUse"><stop stop-color="#2E4C46"/><stop offset="1" stop-color="#173D36"/></linearGradient><radialGradient id="glow"><stop stop-color="#E3FBCC"/><stop offset="1" stop-color="#BDD9A4"/></radialGradient><filter id="shadow" x="0" y="0" width="340" height="350" filterUnits="userSpaceOnUse"><feDropShadow dx="0" dy="12" stdDeviation="10" flood-color="#3A7461" flood-opacity=".13"/></filter></defs>
+          <ellipse cx="170" cy="318" rx="81" ry="10" fill="#8BAE9E" opacity=".18" class="ground-shadow"/>
+          <g class="robot" filter="url(#shadow)">
+            <g class="antenna"><path d="M171 85V52" stroke="#659D84" stroke-width="9" stroke-linecap="round"/><circle cx="171" cy="42" r="14" fill="url(#glow)" stroke="#EAF6DF" stroke-width="4"/><circle cx="167" cy="38" r="4" fill="white" opacity=".7"/></g>
+            <path class="ear left-ear" d="M94 122C67 106 63 83 79 76C94 71 109 91 117 111" fill="#B4DCC7" stroke="#7CAC97" stroke-width="2"/>
+            <path class="ear right-ear" d="M246 122C273 106 277 83 261 76C246 71 231 91 223 111" fill="#B4DCC7" stroke="#7CAC97" stroke-width="2"/>
+            <path class="left-arm" d="M88 210C56 209 48 243 63 253C77 264 86 246 94 236" fill="#A6CFB9" stroke="#8EBBA5" stroke-width="2"/>
+            <path class="right-arm" d="M252 210C284 209 292 243 277 253C263 264 254 246 246 236" fill="#A6CFB9" stroke="#8EBBA5" stroke-width="2"/>
+            <ellipse cx="123" cy="294" rx="31" ry="15" fill="#79A98F"/><ellipse cx="217" cy="294" rx="31" ry="15" fill="#79A98F"/>
+            <rect x="81" y="90" width="178" height="202" rx="76" fill="url(#body)" stroke="#8DBAA4" stroke-width="2"/>
+            <path d="M102 135C109 110 137 102 157 102" stroke="#F4FFF0" stroke-width="7" stroke-linecap="round" opacity=".65"/>
+            <rect x="99" y="128" width="142" height="88" rx="34" fill="url(#glass)" stroke="#6C9F89" stroke-width="3"/>
+            <path d="M115 144C126 137 144 136 161 137" stroke="#8DB6A1" stroke-width="3" stroke-linecap="round" opacity=".25"/>
+            <g class="eyes"><rect class="eye eye-left" x="125" y="157" width="17" height="27" rx="8.5" fill="#D8F8D1"/><rect class="eye eye-right" x="198" y="157" width="17" height="27" rx="8.5" fill="#D8F8D1"/></g>
+            <path class="smile" d="M158 186Q170 199 182 186" stroke="#C9EEBA" stroke-width="4" stroke-linecap="round"/>
+            <ellipse class="talk-mouth" cx="170" cy="188" rx="9" ry="6" fill="#D8F8D1"/>
+            <ellipse cx="118" cy="191" rx="10" ry="4" fill="#DDABAA" opacity=".6"/><ellipse cx="222" cy="191" rx="10" ry="4" fill="#DDABAA" opacity=".6"/>
+            <circle cx="170" cy="252" r="18" fill="#D9EBCB" stroke="#91B69A" stroke-width="2"/><path d="M170 241V250M163 245A10 10 0 1 0 177 245" stroke="#6B947B" stroke-width="2.8" stroke-linecap="round"/>
+            <circle cx="130" cy="242" r="2" fill="#7CA68A"/><circle cx="210" cy="242" r="2" fill="#7CA68A"/>
+          </g>
+        </svg>
+      </button>
+      <div class="pet-name"><span>小矽</span><small id="mood-label">正在打盹</small><span id="signal" class="signal"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span></div>
+    </div>
+    <div class="speech"><span id="speech-source">设备提示</span><p id="speech-text">嗨，我是小矽。唤醒我，一起解开一个不太寻常的故事吧。</p><span class="speech-corner">✧</span></div>
+    <div class="voice-controls"><button id="wake" class="wake-button">唤醒并开始 <span>↗</span></button><button id="mic" class="mic-button" disabled aria-label="开始说话"><span class="mic-icon">●</span><span id="mic-label">点击说话</span></button><button id="interrupt" class="interrupt-button" disabled aria-label="打断播报">■</button></div>
+    <p id="voice-help" class="voice-help">语音由灵矽提供 · 点击后才会打开麦克风</p>
+    <div class="quick-actions"><button id="hint" disabled>✦ 给个提示</button><button id="repeat" disabled>↺ 重听故事</button><button id="next" disabled>下一题 →</button></div>
+    <div id="compact-game" class="compact-game" hidden><span id="compact-title"></span><span id="compact-stats"></span></div>
+    <p id="notice" class="notice" role="status">本机麦克风和扬声器，模拟一台真正接入灵矽的语音设备。</p>
+    <button id="show-board" class="board-toggle">展开推理台 · 也可文字作答 ↗</button>
+  </section>
+
+  <aside class="play-panel">
+    <div class="panel-heading"><div><span class="eyebrow">LET'S FIGURE IT OUT</span><h1>小故事，大反转。</h1></div><span id="case-status" class="case-status">准备开局</span></div>
+    <section class="case-paper"><div class="paper-top"><span id="case-number">谜声 · 情境推理</span><span>◌</span></div><h2 id="case-title">先听故事，再换个角度。</h2><p id="premise">我会讲一个不合常理的小故事。你可以问“是或不是”的问题，确认线索，再说出你推理出的真相。</p><div class="stats"><span>有效提问 <b id="questions">0</b></span><span>提示 <b id="hints">0</b> / 3</span><span>得分 <b id="score">—</b></span></div><div class="paper-actions"><button id="start-game">开始游戏 ↗</button><button id="reveal" disabled>揭晓真相</button></div></section>
+    <div id="result" class="result" hidden><span class="result-mark">✦</span><div><b id="result-title"></b><p id="result-text"></p></div></div>
+    <section class="clue-section"><div class="small-heading"><h3>一起确认的线索</h3><span id="clue-count">0 条</span></div><div id="clues" class="clues"><p class="empty">好问题，是通往真相的第一步。</p></div></section>
+    <section class="conversation-section"><div class="small-heading"><h3>推理电台</h3><span id="radio-state">尚未连接</span></div><div id="conversation" class="conversation" role="log" aria-live="polite"><p class="empty">唤醒小矽，真实的语音对话会出现在这里。</p></div></section>
+    <form id="text-form" class="text-form"><div class="input-modes"><button type="button" id="ask-mode" class="selected">问一个问题</button><button type="button" id="answer-mode">我要作答</button><span>也可以用文字</span></div><div class="text-composer"><input id="text" maxlength="1100" autocomplete="off" aria-label="提问或提交答案" placeholder="例如：和光线有关系吗？"><button id="send" type="submit" aria-label="发送文字" disabled>↑</button></div></form>
+  </aside>
+</main>
+<footer><span>◒ 谜声 × 灵矽</span><span>虚拟硬件演示 · 非独立实体设备</span></footer>
+<dialog id="confirm-dialog"><span class="eyebrow">ONE MORE THING</span><h2 id="confirm-title"></h2><p id="confirm-description"></p><div><button id="cancel">继续推理</button><button id="confirm-yes">确认</button></div></dialog>
+<dialog id="activation"><h2>还差一步，就能见到你。</h2><p>在灵矽现有 Agent 中添加设备，填入这个真实绑定码：</p><strong id="activation-code"></strong><p>绑定后关闭此窗口，再点“唤醒”。</p><div><button id="activation-close">我已完成绑定</button><a href="https://xrobo.qiniu.com/" target="_blank" rel="noopener">打开灵矽后台 ↗</a></div></dialog>
+</body></html>
