@@ -1,111 +1,77 @@
-# 灵矽语音终端（Mac / Linux）
+# 灵矽终端客户端
 
-不需要专用硬件。用电脑麦克风和扬声器，通过灵矽官方 OTA + WebSocket v1 协议连接现有 Agent。
+可选的 Mac/Linux 手动语音入口，使用同仓库的 uv/Python 环境，通过 OTA 与 WebSocket 连接已绑定 Agent。普通桌面使用推荐 [小矽桌面窗口](../../docs/pet.md)，不需要安装本终端的音频依赖。
 
-这不是浏览器 Speech API，也不是本地 ASR：语音 → 灵矽 ASR → Agent → 云端谜声 MCP → 灵矽 TTS → 本机扬声器。
+## 安装
 
-## 一次性准备
-
-需要 uv、Node.js、pnpm 和 libopus；uv 按仓库的 .python-version 管理 Python 3.12。Mac 推荐 Homebrew：
+需要 Node.js、pnpm、uv 和 libopus。Python 版本由 `.python-version` 指定，依赖由 `uv.lock` 锁定。
 
 ```bash
-cd linx-mystery
+# macOS
 brew install opus
 pnpm voice:setup
 pnpm voice:check
 ```
 
-音频依赖由 uv 按 pyproject.toml 和 uv.lock 装进本仓库的 `.venv/`，不修改系统 Python，不再使用 requirements.txt 或手动 pip。macOS 的 sounddevice wheel 自带 PortAudio；Linux 需要另行安装 `libportaudio2`、`libopus0` 和 Python venv 支持。Linux 没有在本次交付实机验证。
+Linux 需安装 `libopus0`、`libportaudio2` 等系统音频依赖。`voice:check` 列出设备并检查编解码，不录音、不连接平台。
 
-`voice:check` 检查 Opus 并列出输入/输出设备，不开始录音，也不连接平台。
-
-## 绑定现有 Agent
+## 连接现有 Agent
 
 ```bash
 pnpm voice:activate
 ```
 
-首次生成本机随机虚拟设备 ID，通过 HTTPS OTA 获取绑定码。在 https://xrobo.qiniu.com/ 打开现有 Agent，添加设备，输入绑定码。
+未绑定时显示真实绑定码，在灵矽现有 Agent 中添加设备。已经绑定时无需再次添加。身份保存在 `.local/lingxi-device.json`，权限为 `0600`，不使用真实网卡 MAC，不应共享或提交。
 
-- 不需要提供账号密码、管理 API token 或修改源码。
-- 虚拟设备身份保存在 `.local/lingxi-device.json`，权限 0600，已被 git 忽略；不要共享这个文件。
-- 不读取真实网卡 MAC，不把本机序列号上传平台。
-- 已绑定时显示成功；未绑定时打印绑定码并以状态码 2 退出，这是预期状态。
-- 绑定码过期后重跑命令即可；不要删除身份文件，否则会生成另一个虚拟设备。
-- OTA 不下载固件，不执行平台返回的升级 URL。
+Agent 的 MCP、模型工具能力和角色配置见 [灵矽接入](../../docs/linx-integration.md)。终端没有端侧工具，hello 中不声明端侧 MCP 支持；游戏工具来自 Agent 挂载的云端 MCP。
 
-## Agent 上启用谜声
+同一设备不能同时运行本终端和桌面窗口。
 
-1. 给 Agent 绑定云端 MCP，传输协议选 **Streamable HTTP**、认证模式选 **Normal**，URL 为部署服务的 `/mcp`。不再支持旧 SSE。
-2. 示例部署地址为 `https://placid.cyou/mcp`（依赖对应电脑、游戏服务及 frp 持续在线）。
-3. 配置 `Authorization: Bearer <LINX_SERVICE_TOKEN>`；服务令牌在游戏服务 `.env`，不是设备 WebSocket token，两者不同。
-4. 启用支持工具调用的意图识别模式（例如 Function Call），聊天模型需要支持工具调用，不能选择“无意图识别”。
-5. 使用 [接入说明](../../docs/linx-integration.md) 中对应模式的提示词，保存整页配置。复用 Agent 模型时使用 [agent-host-prompt.txt](../../docs/agent-host-prompt.txt)。
-6. 能发现 `mystery_catalog`、`mystery_turn` 后开始体验；Agent 主持模式还必须刷新出 `mystery_commit`，见 [协议与实测](../../docs/agent-host.md)。
-
-终端不提供端侧工具，所以 hello 不声明端侧 MCP 支持。游戏工具由 Agent 配置的云端 MCP 提供。
-
-## 不用麦克风的联调诊断
-
-```bash
-pnpm voice:probe  # 只验证真实 WSS 握手，不采集/播放音频
-pnpm voice:smoke  # 用 macOS say 合成“开始游戏”，发送到灵矽并解码返回 TTS
-pnpm voice:playtest # 同一会话九轮 Agent 主持开发冒烟，无麦克风/扬声器
-```
-
-`voice:smoke` 会访问真实平台、消耗少量语音资源；不打开麦克风、不播放扬声器。临时合成音频使用后自动清理，终端会显示识别及回复文字。
-
-退出码：0 = ASR/TTS 完整且收到已知谜题题面；1 = 语音链路未完整通过；2 = 设备未绑定；3 = 语音通过但没有谜声题面，优先检查 Agent 的 MCP 绑定、Function Call 和提示词。收到题面只是回复内容检查，不能替代服务端工具调用记录。
-
-`voice:playtest` 会依次检查开局、自由问法、未知细节、防剧透样本、提示、语义答案和下一关，失败立即停止，报告保存到忽略的 `eval-results/`。它使用真实平台资源，不是独立盲测或抗注入认证；9/9 通过后仍需核对服务端 commit 记录。
-
-## 语音试玩
+## 录音与播放
 
 ```bash
 pnpm voice:start
 ```
 
-- 按 **回车**：打断现有播报，打开麦克风，开始录音。
-- 说“开始游戏”，再按 **回车**：停止录音，等待灵矽识别和回答。
-- 下一句话仍按回车开始，再按回车结束。
-- 输入 `q` 再回车，或按 `Ctrl+C`：退出。
+- 按回车：停止当前播报并开始录音。
+- 再按回车：停止录音，等待平台识别与回复。
+- 输入 `q` 后回车，或按 `Ctrl+C`：退出。
 
-默认手动半双工，不是免唤醒自由对话。建议戴耳机。启动时不会自动录音，只有手动开始后采集音频；运行期间不保存录音。平台和模型供应商的数据处理策略仍由各自配置决定。
-
-首次录音时，macOS 如询问麦克风权限，请允许启动命令所在的 Terminal / iTerm / 编辑器。没有弹窗或失败时检查“系统设置 → 隐私与安全性 → 麦克风”。
-
-指定音频设备（编号先通过 `voice:check` 查看，连接蓝牙设备后可能变化）：
+建议戴耳机。启动不会自动录音，运行期间不保存录音。macOS 需给启动该命令的终端程序授予麦克风权限。
 
 ```bash
 pnpm voice:start --input-device 1 --output-device 2
 ```
 
-## 安全与恢复
+设备编号通过 `voice:check` 查看，连接或断开蓝牙设备后可能改变。
 
-- 每次启动重新获取设备 token，仅保留在内存中，不存盘、不打印。
-- OTA 必须 HTTPS，且不跟随重定向；WebSocket 强制 WSS，使用系统证书校验。
-- 官方 OTA 可能返回 `ws://` 地址；终端升级为同主机 `wss://`，不允许明文降级。不支持 TLS 的自定义服务会连接失败。
-- ping 间隔 20 秒、pong 期限 60 秒，容忍较长播报；超时仍明确失败，不保证网络不会断。
-- 断线后停止会话，退出后重跑 `voice:start`。当前没有自动重连和跨 session 进度恢复。
-- 设备身份和麦克风录音不会提交到 Git；模型/平台返回的 STT 和 TTS 文字会显示在当前终端。
-- 如需自定义 OTA，可通过进程环境设置 `LINGXI_OTA_URL`，只接受 HTTPS，不要指向不可信服务。
-
-## 实现与测试
-
-代码从公开协议独立实现，没有复制官方示例仓库（该仓库读取时未附明确 LICENSE）的源码或固定设备标识。
-
-- `protocol.py`：身份、OTA、WSS 配置、hello 和控制消息。
-- `codec.py`：libopus ctypes 封装，16kHz 单声道 / 60ms 上行，按 hello 协商采样率解码下行。
-- `client.py`：PortAudio 音频、手动录音、WebSocket、缓冲区和退出处理。
-- `tests/`：协议、安全约束、原生编解码、麦克风控制状态机测试。
+## 诊断
 
 ```bash
-pnpm voice:test
+pnpm voice:probe     # 真实 WSS 握手，不录音或播放
+pnpm voice:smoke     # 合成输入经 ASR/TTS，不使用物理麦克风或扬声器
+pnpm voice:playtest  # 固定的同会话游戏流程
+pnpm voice:test     # Python 单元与原生编解码检查
 ```
 
-已在 Apple Silicon Mac 完成依赖安装、原生编解码、设备枚举、21 项测试、真实 OTA 绑定状态检查及已绑定设备的 WSS 握手。使用系统合成语音验证了真实灵矽 ASR 和 TTS 音频解码。Agent 配置完成后，合成语音已成功触发 mystery_turn 并返回《没有响的门铃》题面；服务端记录确认调用带有设备和会话标识。随后通过同一真实 WSS 会话完成六轮游戏：开局、两次提问、提示、85 分通关及换关，见 [实测记录](../../docs/playtest.md)。Agent 主持模式也已在两个会话中分别完成九步开发冒烟，含未知细节、拒绝角色扮演剧透和语义判题；存在提交重试及最高 9.4 秒首音，详见 [Agent 主持实测](../../docs/agent-host.md)。麦克风真实录音和扬声器实际播放仍需在交互式终端体验。
+联网诊断会使用真实平台资源。报告保存在 `eval-results/`，收到题面或语音不能单独代替服务端工具执行记录。完整检查范围见 [维护指南](../../docs/maintenance.md)。
 
-协议依据：
-- https://linx.qiniu.com/docs/xrobot/platform/OTA
-- https://linx.qiniu.com/docs/xrobot/platform/websocket
-- https://linx.qiniu.com/docs/xrobot/guide/quick-start
+## 连接与数据
+
+设备 token 每次通过可信 HTTPS OTA 获取，仅保留在内存中；WSS 使用系统证书校验。OTA 不下载或执行固件升级内容。
+
+上行使用 16kHz 单声道 Opus，帧长 60ms；下行按握手格式解码。终端显示平台返回的识别与播报文字，不输出认证元数据。
+
+断线后停止当前会话，重新运行命令会建立新的业务会话。此入口没有桌面服务的输入登记层，使用普通 MCP 原话参数，不能将两条入口的输入绑定保证混同。
+
+## 文件
+
+| 文件 | 职责 |
+| --- | --- |
+| `protocol.py` | 身份、OTA、握手与控制消息 |
+| `codec.py` | libopus 编解码 |
+| `client.py` | 音频设备、录音、播放和退出 |
+| `diagnostics.py`、`playtest.py` | 联网检查与脱敏报告 |
+| `tests/` | 协议、编解码和控制状态测试 |
+
+实现依据为公开协议，未复制缺少明确授权的第三方示例源码。

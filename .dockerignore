@@ -5,6 +5,7 @@ node_modules
 data
 test-results
 playwright-report
+dist
 .local
 .venv-lingxi
 .venv

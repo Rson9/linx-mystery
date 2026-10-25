@@ -23,7 +23,8 @@ try {
   await page.goto(`http://127.0.0.1:${process.env.PET_PORT || 3212}/?case=silent-bell`);
   await page.locator('#wake').click();
   await expect(page.locator('#connection')).toContainText('灵矽已连接', { timeout: 30000 });
-  await expect(page.locator('#case-title')).toHaveText('没有响的门铃', { timeout: 30000 }); pass('真实 Agent 开局与游戏状态同步');
+  await expect(page.locator('#case-title')).toHaveText('没有响的门铃', { timeout: 30000 });
+  await expect(page.locator('#case-status')).toHaveText('正在推理', { timeout: 30000 }); pass('真实 Agent 开局与游戏状态同步');
   await page.locator('#mic').click(); await expect(page.locator('#mic')).toHaveClass(/recording/, { timeout: 15000 });
   await page.waitForTimeout(4400); await page.locator('#mic').click();
   await expect(page.locator('.message.user').last()).toContainText('房主听力正常吗', { timeout: 30000 });
@@ -41,7 +42,8 @@ try {
   await page.locator('#compact').click(); await page.setViewportSize({ width: 400, height: 740 });
   await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
   await page.screenshot({ path: join(output, 'compact-won.png'), fullPage: true });
-  await page.locator('#next').click(); await expect(page.locator('#case-title')).toHaveText('雨天的十八楼', { timeout: 30000 }); pass('切换下一题');
+  await page.locator('#next').click(); await expect(page.locator('#case-title')).toHaveText('雨天的十八楼', { timeout: 30000 });
+  await expect(page.locator('#case-status')).toHaveText('正在推理', { timeout: 30000 }); pass('切换下一题');
   if (errors.length) throw new Error('浏览器发生脚本错误');
   await page.locator('#wake').click(); await expect(page.locator('#connection')).toContainText('等待唤醒'); pass('休眠断开并关闭音频');
 } catch (error) {

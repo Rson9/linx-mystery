@@ -5,7 +5,7 @@
 <header class="topbar"><a class="brand" href="./"><span class="brand-icon">◒</span><span>谜声 <small>小矽的推理电台</small></span></a><div class="top-actions"><span id="connection" class="connection"><i></i><span>等待唤醒</span></span><button id="compact" class="icon-button" aria-label="切换桌宠小窗">▣</button><button id="mute" class="icon-button" aria-label="静音" aria-pressed="false">♫</button></div></header>
 <main class="desk">
   <section class="companion">
-    <div class="section-kicker"><span>YOUR LITTLE THINKING PARTNER</span><span class="hardware-tag">虚拟硬件 · LX-01</span></div>
+    <div class="section-kicker"><span>YOUR LITTLE THINKING PARTNER</span><span class="hardware-tag">桌面伙伴 · LX-01</span></div>
     <div id="pet-device" class="pet-stage" data-mood="sleeping">
       <span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><span class="spark spark-one">✦</span><span class="spark spark-two">✧</span><span class="stage-caption">不是所有答案，都在第一眼。</span>
       <button id="pet-touch" class="pet-character" aria-label="摸摸小矽">
@@ -40,7 +40,7 @@
     <div class="quick-actions"><button id="library-launcher">▦ 选个故事</button><button id="hint" disabled>✦ 给个提示</button><button id="repeat" disabled>↺ 重听故事</button><button id="next" disabled>下一题 →</button></div>
     <div id="compact-game" class="compact-game" hidden><span id="compact-title"></span><span id="compact-stats"></span></div>
     <button id="open-replay" class="replay-link" hidden>↺ 回看这一局 · 推理回放</button>
-    <p id="notice" class="notice" role="status">本机麦克风和扬声器，模拟一台真正接入灵矽的语音设备。</p>
+    <p id="notice" class="notice" role="status">选个故事，唤醒小矽。麦克风只在点击说话后开启。</p>
     <button id="show-board" class="board-toggle">展开推理台 · 也可文字作答 ↗</button>
   </section>
 
@@ -55,9 +55,9 @@
     <form id="text-form" class="text-form"><div class="input-modes"><button type="button" id="ask-mode" class="selected">问一个问题</button><button type="button" id="answer-mode">我要作答</button><span>也可以用文字</span></div><div class="text-composer"><input id="text" maxlength="1100" autocomplete="off" aria-label="提问或提交答案" placeholder="例如：和光线有关系吗？"><button id="send" type="submit" aria-label="发送文字" disabled>↑</button></div></form>
   </aside>
 </main>
-<footer><span>◒ 谜声 × 灵矽</span><span>虚拟硬件演示 · 非独立实体设备</span></footer>
+<footer><span>◒ 谜声 × 灵矽</span><span>本机运行 · 语音由灵矽提供</span></footer>
 <dialog id="library-dialog" class="wide-dialog" aria-labelledby="library-title"><header class="dialog-heading"><div><span class="eyebrow">PICK A LITTLE MYSTERY</span><h2 id="library-title">挑一个不寻常的故事。</h2></div><button id="library-close" aria-label="关闭题库">×</button></header><p id="library-status">正在整理故事…</p><section id="library-list" class="library-grid" aria-label="故事题库"></section><p class="dialog-note">新手推荐从暖场题开始。推理中的换题需要确认，不会因为浏览题库放弃当前进度。</p></dialog>
-<dialog id="replay-dialog" class="wide-dialog" aria-labelledby="replay-title"><header class="dialog-heading"><div><span class="eyebrow">YOUR REASONING, NOT JUST A SCORE</span><h2 id="replay-title">这一局，你是怎样想出来的。</h2></div><button id="replay-close" aria-label="关闭推理回放">×</button></header><p id="replay-summary"></p><section id="replay-metrics" class="replay-metrics"></section><section class="debrief"><span>题面的错觉 → 换个角度</span><p id="replay-illusion"></p><b id="replay-takeaway"></b></section><ol id="replay-steps" class="replay-steps"></ol><section class="debrief truth-card"><span>因果拼图</span><p id="replay-truth"></p></section><p id="replay-note" class="dialog-note"></p><section class="replay-actions"><button id="replay-speak">♫ 语音回顾 · 实验</button><button id="replay-share">↓ 无剧透破案卡</button><button id="replay-next">再来一个故事 →</button></section></dialog>
+<dialog id="replay-dialog" class="wide-dialog" aria-labelledby="replay-title"><header class="dialog-heading"><div><span class="eyebrow">YOUR REASONING, NOT JUST A SCORE</span><h2 id="replay-title">这一局，你是怎样想出来的。</h2></div><button id="replay-close" aria-label="关闭推理回放">×</button></header><p id="replay-summary"></p><section id="replay-metrics" class="replay-metrics"></section><section class="debrief"><span>题面的错觉 → 换个角度</span><p id="replay-illusion"></p><b id="replay-takeaway"></b></section><ol id="replay-steps" class="replay-steps"></ol><section class="debrief truth-card"><span>因果拼图</span><p id="replay-truth"></p></section><p id="replay-note" class="dialog-note"></p><section class="replay-actions"><button id="replay-share">↓ 无剧透破案卡</button><button id="replay-next">再来一个故事 →</button></section></dialog>
 <dialog id="confirm-dialog"><span class="eyebrow">ONE MORE THING</span><h2 id="confirm-title"></h2><p id="confirm-description"></p><div><button id="cancel">继续推理</button><button id="confirm-yes">确认</button></div></dialog>
 <dialog id="activation"><h2>还差一步，就能见到你。</h2><p>在灵矽现有 Agent 中添加设备，填入这个真实绑定码：</p><strong id="activation-code"></strong><p>绑定后关闭此窗口，再点“唤醒”。</p><div><button id="activation-close">我已完成绑定</button><a href="https://xrobo.qiniu.com/" target="_blank" rel="noopener">打开灵矽后台 ↗</a></div></dialog>
 </body></html>

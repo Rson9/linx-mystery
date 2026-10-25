@@ -1,162 +1,77 @@
 # 谜声 · MISHENG
 
-面向灵矽的语音情境推理游戏。听题、提问、获得提示、提交推理、结算和下一关；单人可玩，多人可围坐参与，不是跑团。
+**和小矽一起，把线索连成真相。**
 
-**主入口是“小矽桌宠／虚拟硬件演示”。** 题库现有 3 道自编候选题 + 5 道经典改编，支持选题、渐进提示、因果作答、计分、实际记录回放及无剧透 PNG 破案卡。界面换题会新建语音会话，上一局文字回放留在当前页面。
+谜声是一款桌面语音情境推理游戏。听一个不寻常的故事，用“是或不是”的问题逐步确认线索，再说出你的解释。小矽负责守住故事的事实，你负责发现另一种可能。
 
-**当前真实语音未稳定通过：** 公网 MCP 工具发现及开局预检已恢复；最近完整复测完成前两题 85 / 80 分，第三题仍出现 Agent 漏调工具、口头给出相反判断。已拦截明显工具调用文本，但还需检查模型工具能力、实际挂载和平台兼容。历史三题 85 / 80 / 95 分不能作为当前配置稳定通过的证明。
+![谜声桌面界面](docs/assets/pet-desktop.png)
 
-原来的规则网页保留作备用。Agent 主持仍为实验模式，外部独立模型是另一条备选路线；有限冒烟通过不代表完整盲测或安全认证。
+## 一局完整的推理
 
-- [桌宠玩法、真实验收与边界](docs/pet.md)
-- [题库、提示、推理回放与当前验收状态](docs/library.md)
-- [三分钟演示排练稿](docs/demo.md)
-- [竞赛版优先级与验收标准](docs/competition-roadmap.md)
-- [灵矽接入](docs/linx-integration.md)
-- [六轮真实平台实测](docs/playtest.md)
-- [复用 Agent 模型的配置、协议与实测](docs/agent-host.md)
-- [独立模型评测与延迟阻塞](docs/host-evaluation.md)
-- [Mac/Linux 语音终端](clients/lingxi/README.md)
+- **挑一个故事**：8 道内置谜题，包含 3 道项目编写的新题与 5 道经典改编。
+- **开口提问**：语音通过灵矽完成识别与播报，也可以随时使用文字。
+- **逐步找线索**：查看已确认的问题，按需领取三级提示；不擅自消耗提示。
+- **解释真相**：提交完整因果，由服务端结算得分。
+- **回看这一局**：按实际问题、判词、提示与作答生成推理回放。
+- **带走破案卡**：下载不含谜底、对话或录音的 PNG，分享你的成绩。
 
-## 环境与启动
+<img src="docs/assets/pet-compact.png" width="280" alt="小矽桌面小窗"> <img src="docs/assets/pet-case-card.png" width="280" alt="无剧透破案卡示例">
 
-Node.js 推荐 24+（最低 22.13），**pnpm 12.0.0**；Python 由 **uv** 管理，`.python-version` 选择 3.12，依赖锁在 `uv.lock`。
+## 快速启动
+
+运行环境：Node.js 24+（最低 22.13）、pnpm 12、Google Chrome。macOS 可自动打开独立桌面窗口；其他环境可在 Chrome 中访问本机地址。
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm pet
-# 自动检查/复用游戏服务，打开独立 Chrome 桌宠窗口
-# 本机入口：http://127.0.0.1:3212/
 ```
 
-已有灵矽 Agent、MCP 和本机设备配置会沿用；新设备在窗口内获取真实绑定码。桌宠运行不需要 Python / libopus，uv/Python 终端保留作兼容和诊断。桌宠服务只绑定本机，**不要将 3212 加入 frp**；公网上的 `/pet/` 仅为外观预览。
+打开 **http://127.0.0.1:3212/**，选择故事，点击“唤醒并开始”。收到开局确认后，点击“说话”开始录音，说完再点一次发送。
 
-以下是历史预录真实链路截图，不表示最新版当前配置已通过验收。
-
-![历史真实灵矽通关后的推理台](docs/assets/pet-desktop.png)
-
-<img src="docs/assets/pet-compact.png" width="300" alt="小矽真实平台 85 分通关后的桌宠小窗">
-
-只有一份 Node 锁文件 `pnpm-lock.yaml`，不混用 npm/yarn。Python 使用 `pyproject.toml` + `uv.lock`，不手动 pip 安装。
-
-运行 `pnpm start` 可打开原来的规则备用页面（端口以 .env 为准）。该旧页面不填密钥即可体验 8 道规则关卡。题面不等于谜底，公共 API 不下发当前未揭晓题的真相和评分规准；已结束的上局记录可回看。网页麦克风与朗读为浏览器 Speech API，**不经过灵矽**；识别结果先填入输入框，检查后发送。浏览器厂商可能处理音频，请勿输入敏感内容。
-
-## 不用专用硬件：Mac 连接真实灵矽
+语音需要已配置的灵矽 Agent、游戏 MCP 和已绑定设备。首次部署请按 [部署配置](docs/deployment.md) 完成设置；已有 `.env` 和绑定身份时会直接沿用，不需要另外配置独立模型密钥。
 
 ```bash
-brew install opus
-pnpm voice:setup      # uv sync --locked；依赖放在 .venv，不改系统 Python
-pnpm voice:check      # 原生 Opus 和音频设备自检，不录音
-pnpm voice:activate   # 获取绑定码，添加到现有 Agent
-pnpm voice:probe      # 真实 WSS 握手，不录音
-pnpm voice:smoke      # 合成“开始游戏”检查 ASR/TTS，不打开麦克风
-pnpm voice:playtest   # 同一会话九轮 Agent 主持冒烟，不使用麦克风/扬声器
-pnpm voice:start      # 回车开始录音，再次回车结束；q 退出
+pnpm pet --no-open  # 启动服务，不自动打开窗口
+pnpm pet:open      # 打开已运行的桌面窗口
 ```
 
-状态文件 `.local/lingxi-device.json` 权限 0600，设备 token 只在内存中。Agent 需要配置游戏 MCP、支持工具调用的模型和角色提示词。详见终端文档。已完成的六轮实测使用合成语音，不代表实际麦克风、扬声器、噪声、打断和重连均已验收。
+## 第一次怎么玩
 
-## MCP
+1. 从《回不去的三句话》开始，或点“选个故事”。
+2. 每次只问一件能回答“是或不是”的事；故事未交代的细节会保留为未知。
+3. 需要帮助时点“给个提示”；已经明确问到的方向不会重复收费。
+4. 想好后说“我的答案是……”并解释原因，或切到“我要作答”输入文字。
+5. 通关后查看回放、保存破案卡，再开启下一题。
 
-仅支持 **Streamable HTTP `POST /mcp`**，Normal 认证模式下配置：
+建议戴耳机。麦克风只在主动点击后开启；文字指令会等待当前播报结束，方块按钮可显式打断。
 
-```text
-Authorization: Bearer <LINX_SERVICE_TOKEN>
-```
+## 文档
 
-工具：`mystery_catalog`、`mystery_turn`；开启 Agent 主持后增加 `mystery_commit`。GET/DELETE `/mcp` 返回 405，旧 SSE 端点已删除。每次游戏调用需要平台自动传入设备/会话标识；查询工具不需要设备身份。
+| 文档 | 内容 |
+| --- | --- |
+| [使用指南](docs/pet.md) | 录音、文字、提示、结算、回放与常见操作 |
+| [故事与玩法](docs/library.md) | 题库分类、提示层级、计分和内容维护 |
+| [部署配置](docs/deployment.md) | 环境变量、启动、升级、持久化与反向代理 |
+| [灵矽接入](docs/linx-integration.md) | Agent、设备绑定和 MCP 设置 |
+| [系统设计](docs/architecture.md) | 音频、可信输入、裁判、状态与安全边界 |
+| [维护指南](docs/maintenance.md) | 验证命令、运行诊断、备份与故障处理 |
+| [终端客户端](clients/lingxi/README.md) | 可选的 uv/Python 语音终端 |
+| [版本记录](CHANGELOG.md) | 功能与行为变更 |
 
-部署实例 `https://placid.cyou/mcp` 依赖本机 3000 端口服务和 frp 持续在线。GitHub 仓库地址不是服务 URL。
+## 运行方式
+
+桌面入口通过本机服务连接灵矽，采用 16kHz 单声道 PCM；不使用浏览器 Speech API 代替灵矽。游戏引擎保存进度与分数，模型不能直接修改结算结果。
+
+桌面端口 `3212` **只供本机使用，不应暴露公网**。公开服务仅部署游戏 API 与 MCP。另保留文字版页面，其浏览器语音辅助与灵矽桌面语音相互独立。
+
+配置只保存在本机 `.env`；设备身份位于 `.local/lingxi-device.json`。两者都不应进入版本库或交付包。
+
+## 验证与交付
 
 ```bash
-cp .env.example .env  # 已有 .env 时不要覆盖
-# 配置 LINX_SERVICE_TOKEN、PUBLIC_ORIGIN 后启动服务
-pnpm mcp:check
+pnpm check        # 题库、服务端与浏览器回归，不调用真实平台
+pnpm voice:test   # 可选终端的 Python 回归，需要 uv 与音频依赖
+pnpm package     # 从干净的 Git 提交生成源码交付包
 ```
 
-服务令牌、灵矽管理账号 token、设备 token、模型 key 各自独立，不能互换。密钥只保存在服务端 `.env` 或部署环境。
-
-## 首选：复用灵矽 Agent 模型
-
-```ini
-LINX_AGENT_HOST_ENABLED=1
-AI_HOST_ENABLED=0
-```
-
-标准问法做完整问题的精确内置核对；其他提问由 MCP 在 turn 阶段提供内部主持资料，Agent 提交结构化 judgment，commit 阶段校验证据、玩家引文、请求版本并由状态机结算。完整答案仍走因果规准判断；这条路径不调用独立模型 API。平台需刷新工具并使用 [新提示词](docs/agent-host-prompt.txt)，操作见 Agent 主持文档。
-
-私有资料会进入 Agent/平台上下文，不是安全隔离字段；仍可能被模型泄露或错误判定。本轮一条攻击样本未泄露，不代表抗注入认证。网页不提供这份内部资料。
-
-## 可选：独立模型裁判（真实评测尚未达标）
-
-在 `.env` 配置 OpenAI-compatible 服务的 `LLM_BASE_URL`（基础 /v1 或完整 /v1/chat/completions 地址均可）、`LLM_API_KEY`、`LLM_MODEL`，先保持 `AI_HOST_ENABLED=0`：
-
-```bash
-pnpm eval:host
-# 配置缺失退出 2，表示没有执行模型质量评测，而不是通过
-```
-
-开发评测集覆盖 5 关、未知细节、否定、多问题、注入、错误因果和堆词判题。目标总体 ≥95%，安全样本 100%；开发集通过还需独立盲测，报告存入忽略的 `eval-results/`。门槛和排期见竞赛路线图。
-
-当前真实接口评测受超时阻塞，详见评测报告，不要直接打开 AI 模式。可选 `LLM_REASONING_EFFORT` 只在供应商支持时设置，留空使用供应商默认值；low 在本次试验中未证实改善。
-
-真实质量与延迟达标后再设 `AI_HOST_ENABLED=1` 并重启：
-
-- 读取固定真相，只输出是/否/无关/无法确定/澄清/拒答，不扩展整条事实。
-- 是/否需要合法内部证据，证据不发给玩家；合法证据 ID 不等于语义正确，仍需真实评测。
-- 按独立因果规准和玩家原文引文判题；状态机决定通关，模型不能直接修改状态。
-- 模型异常/超时/无效输出，不退回会剧透的关键词答案，不扣提问或提交次数。
-- 未记载细节、澄清和安全拒答不扣提问次数。
-- AI 不可用时提示、重听等确定性操作仍可用。
-
-不开启 AI 时仍是旧规则演示：只做有限关键词匹配，可能连带泄露关键事实；判题可能误拒复杂正确表达或被堆词绕过，不适合竞技。新模型测试中的 mock 只验证程序约束，不证明真实模型的理解/抗注入能力。
-
-## 测试
-
-```bash
-pnpm library:check # 八题结构与引用检查；不等于逻辑或真人体验合格
-pnpm test          # 引擎、主持结构校验、HTTP/MCP 集成
-pnpm test:e2e      # 原网页 + 桌宠完整/小窗流程，使用模拟 Agent
-pnpm voice:test    # uv 下的 Python 测试，含本机 libopus 编解码
-pnpm eval:host     # 配置真实模型后运行，可能产生 API 费用
-pnpm pet:check --allow-platform # 经典题真实桌宠验收，预录输入
-pnpm library:check:live --allow-platform # 新题真实链路，区分标准问法与 Agent 判断
-```
-
-依赖锁文件可复现安装。缺少 libopus 时 Python 原生编解码测试会跳过，不等于本机音频已通过。真实平台语音诊断会消耗少量平台资源。
-
-## 部署与边界
-
-```bash
-docker build -t linx-mystery .
-docker run --rm -p 127.0.0.1:3210:3210 --env-file .env \
-  -e HOST=0.0.0.0 -e DB_PATH=/app/data/games.sqlite \
-  -v misheng-data:/app/data linx-mystery
-```
-
-Dockerfile 使用 pnpm frozen lockfile，镜像构建/运行尚未实测。对外由反向代理提供 HTTPS，设置准确的 `PUBLIC_ORIGIN`。服务默认只监听本机，平台端点未设置令牌时关闭。
-
-另保留非 MCP 的第三方业务 `POST /api/chat/stream` SSE 回调，使用时需关闭代理缓冲。不能把它当作 MCP URL 或 OpenAI API。
-
-初版为单实例小流量：SQLite 持久化，基础直连 IP 限流；仍需正式部署保活、可信代理、数据清理、备份和监控。清理网页 cookie 后无法恢复原进度。数据库含文字和进度，不保存录音。
-
-## 代码
-
-```text
-src/cases.js          经典改编与公共题库投影（服务端）
-src/library/          三道自编候选、事实、因果规准与复盘说明
-src/library.js        题库检查、明确命令、标准问法和递进提示
-src/replay.js         实际事件回放、计分与公开投影
-src/host.js           AI 裁判、输出与引用校验
-src/engine.js         状态、计分、持久化、规则与 AI 模式
-src/server.js         游戏 API、Streamable HTTP MCP、认证
-src/pet-server.js     本机语音桥，设备 token 不进入浏览器
-src/device-view.js    设备状态投影与实际输入登记
-public/pet/           桌宠界面、Web Audio / AudioWorklet PCM
-public/               保留的旧规则网页
-clients/lingxi/       同仓库 Python 音频终端
-scripts/              uv 启动器、MCP 检查、模型评测
-eval/                 人工标注的开发评测集（不是独立盲测）
-test/、e2e/           程序与网页回归
-docs/                 接入、实测、竞赛路线图
-```
+真实语音检查需显式启用平台访问，命令与覆盖范围见 [维护指南](docs/maintenance.md)。

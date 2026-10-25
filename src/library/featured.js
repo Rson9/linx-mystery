@@ -1,4 +1,4 @@
-// 自编候选题。这里只表示本项目编写，不宣称全球独创；真人盲测仍是上线质量门槛。
+// 项目编写题。题面、事实、提示、评分规准与复盘说明由服务端统一维护。
 export const featuredCases = [
   {
     id: 'return-route', title: '回不去的三句话', difficulty: '暖场', minutes: 3, icon: '↶',

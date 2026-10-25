@@ -22,7 +22,7 @@ agent.on('connection', socket => {
     if (voice) socket.send(JSON.stringify({ type: 'stt', text }));
     socket.send(JSON.stringify({ type: 'tts', state: 'start' }));
     socket.send(JSON.stringify({ type: 'tts', state: 'sentence_start', text: result.answer }));
-    for (let i = 0; i < 4; i++) socket.send(Buffer.alloc(640));
+    for (let i = 0; i < (text === '测试长播报' ? 75 : 4); i++) socket.send(Buffer.alloc(640));
     socket.send(JSON.stringify({ type: 'tts', state: 'stop' }));
   };
   socket.on('message', (raw, binary) => {

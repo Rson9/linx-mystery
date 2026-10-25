@@ -1,6 +1,6 @@
 {
   "name": "linx-mystery",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "packageManager": "pnpm@12.0.0",
   "type": "module",
@@ -16,6 +16,8 @@
     "pet:check": "node --env-file-if-exists=.env scripts/check-pet.mjs",
     "library:check": "node scripts/check-library-data.mjs",
     "library:check:live": "node --env-file-if-exists=.env scripts/check-library.mjs",
+    "check": "pnpm library:check && pnpm test && pnpm test:e2e",
+    "package": "node scripts/package.mjs",
     "test": "node --test test/*.test.js",
     "test:e2e": "playwright test",
     "mcp:check": "node --env-file-if-exists=.env scripts/check-mcp.mjs",

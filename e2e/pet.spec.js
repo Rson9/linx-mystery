@@ -108,3 +108,35 @@ test('已处理但没有 TTS 时恢复已确认文字，不重复取提示（模
   await expect(page.locator('#hints')).toHaveText('1'); await page.locator('#wake').click();
   expect(errors).toEqual([]);
 });
+
+test('语音连接不等于开局，收到游戏记录前不能录音（模拟延迟开局）', async ({ page }) => {
+  let socket;
+  await page.routeWebSocket('**/voice', ws => { socket = ws; ws.send(JSON.stringify({ type: 'ready' })); });
+  await page.goto('/');
+  await page.evaluate(() => { window.__captures = 0; navigator.mediaDevices.getUserMedia = async () => { window.__captures++; throw new Error('unexpected microphone capture'); }; });
+  await page.locator('#wake').click(); await expect(page.locator('#connection')).toContainText('灵矽已连接');
+  await expect(page.locator('#mic')).toBeDisabled(); await expect(page.locator('#mic-label')).toHaveText('等待开局…');
+  await page.locator('#mic').dispatchEvent('click'); expect(await page.evaluate(() => window.__captures)).toBe(0);
+  socket.send(JSON.stringify({ type: 'game', state: { gameId: 'fixture-start', caseId: 'return-route', title: '回不去的三句话', premise: '模拟题面', status: 'playing', questions: 0, hintsUsed: 0, attempts: 0, score: null, history: [], revision: 1, hintsAvailable: true } }));
+  await expect(page.locator('#case-status')).toHaveText('正在推理'); await expect(page.locator('#mic')).toBeEnabled();
+  await page.locator('#wake').click();
+});
+
+test('文字指令不与播报抢发，结束后恢复；显式打断和录音入口仍可用（模拟 Agent）', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/'); await page.locator('#wake').click();
+  await expect(page.locator('#send')).toBeEnabled();
+  const speak = async () => {
+    await page.locator('#text').fill('测试长播报'); await page.locator('#send').click();
+    await expect(page.locator('#pet-device')).toHaveAttribute('data-mood', 'speaking');
+    await expect(page.locator('#send')).toBeDisabled(); await expect(page.locator('#hint')).toBeDisabled();
+    await expect(page.locator('#repeat')).toBeDisabled(); await expect(page.locator('#mic')).toBeEnabled();
+    await expect(page.locator('#interrupt')).toBeEnabled();
+  };
+  await speak(); await expect(page.locator('#send')).toBeEnabled({ timeout: 5000 });
+  await expect(page.locator('#notice')).toContainText('轮到你了');
+  await speak(); await page.locator('#interrupt').click();
+  await expect(page.locator('#send')).toBeEnabled(); await expect(page.locator('#hint')).toBeEnabled();
+  await expect(page.locator('#notice')).toContainText('已打断当前回复');
+  await page.locator('#wake').click(); expect(errors).toEqual([]);
+});

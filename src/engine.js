@@ -213,7 +213,7 @@ export class GameEngine {
           }
         } else {
           state.attempts++;
-          // 离线规则模式只用于演示，正式 AI 主持不以关键词判题。
+          // 规则备用模式按概念匹配；语义判题由 Agent 或独立模型处理。
           const negative = /不是|并非|不可能|没有|没用|无关|不靠|不需要|不能|未|不对|不涉及/.test(q);
           const matched = c.concepts.filter(group => group.some(k => q.includes(k))).length;
           recordTrace(state, { kind: 'answer', text, correct: !negative && matched === c.concepts.length, source: 'rules-preview' });

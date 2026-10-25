@@ -18,21 +18,21 @@ function controls() {
   const busy = connecting || micBusy || recording || awaiting;
   $('wake').disabled = !isLocal || libraryLoading || connecting || micBusy || recording;
   $('wake').firstChild.textContent = connecting ? '正在唤醒… ' : ready ? '让小矽休眠 ' : '唤醒并开始 ';
-  $('mic').disabled = !ready || micBusy; $('mic').classList.toggle('recording', recording);
+  $('mic').disabled = !ready || !game || micBusy; $('mic').classList.toggle('recording', recording);
   $('mic').setAttribute('aria-label', recording ? '结束说话' : '开始说话');
-  $('mic-label').textContent = micBusy ? '请稍等…' : recording ? '说完点这里' : '点击说话';
+  $('mic-label').textContent = micBusy ? '请稍等…' : recording ? '说完点这里' : ready && !game ? '等待开局…' : '点击说话';
   $('interrupt').disabled = !ready;
-  for (const id of ['hint', 'coach-hint', 'repeat', 'next', 'send', 'replay-speak']) $(id).disabled = !ready || busy;
-  if (viewingReplay && viewingReplay.gameId !== game?.gameId && viewingReplay.gameId !== game?.previousRound?.gameId) $('replay-speak').disabled = true;
+  for (const id of ['hint', 'coach-hint', 'repeat', 'send']) $(id).disabled = !ready || busy || speaking;
+  $('next').disabled = !ready || busy;
   if (!game) for (const id of ['hint', 'coach-hint', 'repeat', 'next']) $(id).disabled = true;
   if (game?.hintsAvailable === false) { $('hint').disabled = true; $('coach-hint').disabled = true; }
   $('library-launcher').disabled = libraryLoading || !library.length;
   for (const card of document.querySelectorAll('.story-card')) card.disabled = busy;
-  for (const button of document.querySelectorAll('.starter-question')) button.disabled = !ready || busy;
-  $('start-game').disabled = !isLocal || libraryLoading || busy;
+  for (const button of document.querySelectorAll('.starter-question')) button.disabled = !ready || busy || speaking;
+  $('start-game').disabled = !isLocal || libraryLoading || busy || (speaking && !game);
   $('start-game').textContent = game?.status === 'playing' ? '换一道题 ↗' : '开始这题 ↗';
-  $('reveal').disabled = !ready || busy || game?.status !== 'playing';
-  $('voice-help').textContent = recording ? '麦克风已开启 · 再点一次发送 · 最长 45 秒' : ready ? '说完再点一次发送 · 作答时先说“我的答案是”' : '语音由灵矽提供 · 点击后才会打开麦克风';
+  $('reveal').disabled = !ready || busy || speaking || game?.status !== 'playing';
+  $('voice-help').textContent = recording ? '麦克风已开启 · 再点一次发送 · 最长 45 秒' : ready && !game ? '正在确认游戏开局，确认后才能开启麦克风' : ready && speaking ? '正在播报 · 可点 ■ 打断，或直接点击说话' : ready ? '说完再点一次发送 · 作答时先说“我的答案是”' : '语音由灵矽提供 · 点击后才会打开麦克风';
 }
 function waiting(value) {
   awaiting = value; clearTimeout(slowTimer); clearTimeout(responseTimer);
@@ -182,7 +182,7 @@ function openReplay() {
     if (step.kind === 'answer') { const status = document.createElement('b'); status.textContent = step.correct ? '✓ 推理正确' : '还没完整解释'; row.append(status); }
     $('replay-steps').append(row);
   }
-  $('replay-note').textContent = `${replay.truncated ? '仅展示最近的推理片段。' : ''}本页引用识别原文与服务端判词，不编造你的思考过程。语音回顾是实验功能，平台可能改写；准确记录以本页为准。`;
+  $('replay-note').textContent = `${replay.truncated ? '仅展示最近的推理片段。' : ''}回放仅展示实际记录的提问、判词、提示和作答。`;
   $('replay-share').hidden = replay.status !== 'won';
   $('replay-next').textContent = game?.status === 'playing' ? '回到当前推理 →' : '再来一个故事 →';
   $('replay-dialog').showModal(); $('replay-dialog').scrollTop = 0; controls();
@@ -195,14 +195,14 @@ async function confirmAction(title, description) {
   });
 }
 function send(value) { if (ws?.readyState !== WebSocket.OPEN) throw new Error('小矽还没有连接，请先唤醒。'); ws.send(JSON.stringify(value)); }
-function stopPlayback() { responseEpoch++; audio.silence(); speaking = false; currentReply = null; }
+function stopPlayback() { responseEpoch++; audio.silence(); speaking = false; currentReply = null; controls(); }
 async function sendText(text, label = '你 · 文字') {
-  if (!ready || recording || micBusy || awaiting) return;
+  if (!ready || recording || micBusy || awaiting || speaking) return;
   waiting(true); pendingEcho = normalized(text); controls();
   try {
     await audio.resume(); if (!ready) { waiting(false); controls(); return; }
     stopPlayback(); send({ type: 'say', text }); addMessage('user', text, label);
-    mood('thinking'); bubble('收到啦，我在认真想你的问题。'); notice('文字指令也经过真实灵矽 Agent，不是本地规则回复。');
+    mood('thinking'); bubble('收到啦，我在认真想你的问题。'); notice('问题已发送，小矽正在确认。');
   } catch (error) { waiting(false); controls(); notice(error.message, true); }
 }
 async function disconnect(sleep = true) {
@@ -235,7 +235,7 @@ async function wake() {
       if (!msg || typeof msg !== 'object') return;
       if (msg.type === 'ready') {
         ready = true; connecting = false; connection('灵矽已连接', true); mood('idle'); controls();
-        notice('已接通真实灵矽。第一次说话会请求麦克风权限。');
+        notice('已连接。开局后点击说话，首次使用需允许麦克风权限。');
         void sendText(selectedCase ? `开始谜声游戏《${selectedCase.title}》` : '开始游戏', '你 · 开局按钮');
       } else if (msg.type === 'activation') {
         pairing = true; connecting = false; controls(); mood('error');
@@ -251,7 +251,7 @@ async function wake() {
       } else if (msg.type === 'record_limit') { await stopRecord(false); notice('本次录音达到 45 秒，已自动发送并关闭麦克风。'); }
       else if (msg.type === 'tts') {
         if (msg.is_aborted) { stopPlayback(); if (ready && !recording) mood('idle'); }
-        else if (msg.state === 'start') { waiting(false); controls(); speaking = true; currentReply = null; mood('speaking'); }
+        else if (msg.state === 'start') { speaking = true; waiting(false); controls(); currentReply = null; mood('speaking'); }
         else if (msg.state === 'sentence_start' && msg.text) {
           speaking = true; mood('speaking'); bubble(msg.text, '灵矽正在播报');
           if (!currentReply) currentReply = addMessage('assistant', msg.text, '小矽 · 灵矽播报');
@@ -259,7 +259,8 @@ async function wake() {
         } else if (msg.state === 'stop') {
           const response = responseEpoch; await audio.finished();
           if (currentEpoch === epoch && response === responseEpoch && ready && !recording) {
-            speaking = false; mood(game?.status === 'won' ? 'celebrate' : 'idle'); $('speech-source').textContent = '上一句 · 灵矽播报';
+            speaking = false; controls(); mood(game?.status === 'won' ? 'celebrate' : 'idle'); $('speech-source').textContent = '上一句 · 灵矽播报';
+            if (!$('notice').classList.contains('error')) notice(!game ? '等待游戏开局确认。' : game.status === 'won' ? '推理完成。回看这一局，或开始下一个故事。' : game.status === 'revealed' ? '真相已揭晓。可以查看回放或开始下一题。' : '轮到你了。问一个问题，或说“我的答案是……”。');
           }
         }
       }
@@ -273,7 +274,7 @@ async function wake() {
   } catch (error) { connecting = false; ready = false; controls(); connection('尚未连接'); mood('error'); notice(error.message, true); }
 }
 async function startRecord() {
-  if (!ready || recording || micBusy) return;
+  if (!ready || !game || recording || micBusy) return;
   micBusy = true; controls(); const currentEpoch = epoch;
   try {
     waiting(false); pendingEcho = null; stopPlayback(); send({ type: 'abort' });
@@ -295,7 +296,7 @@ async function stopRecord(sendStop = true) {
 }
 $('wake').onclick = () => void wake();
 $('mic').onclick = () => void (recording ? stopRecord() : startRecord());
-$('interrupt').onclick = () => { if (!ready) return; waiting(false); controls(); stopPlayback(); send({ type: 'abort' }); mood('idle'); bubble('暂停了。你可以继续问，也可以重听故事。'); };
+$('interrupt').onclick = () => { if (!ready) return; waiting(false); controls(); stopPlayback(); send({ type: 'abort' }); mood('idle'); bubble('暂停了。你可以继续问，也可以重听故事。'); notice('已打断当前回复，可以继续提问。'); };
 $('hint').onclick = $('coach-hint').onclick = () => void sendText('给我提示', '你 · 提示按钮');
 $('repeat').onclick = () => void sendText('重听题目', '你 · 重听按钮');
 $('library-launcher').onclick = () => { $('library-dialog').showModal(); controls(); };
@@ -309,7 +310,6 @@ $('replay-share').onclick = async () => {
   catch (error) { $('replay-note').textContent = error.message; }
   finally { $('replay-share').disabled = false; }
 };
-$('replay-speak').onclick = () => void sendText(viewingReplay?.gameId === game?.gameId ? '请用游戏工具回顾本局推理记录' : '请用游戏工具回顾上一局推理记录', '你 · 语音复盘');
 $('replay-next').onclick = () => { $('replay-dialog').close(); if (game?.status !== 'playing') $('next').click(); };
 $('next').onclick = async () => {
   if (!ready || recording || micBusy || awaiting || !library.length) return;
@@ -329,7 +329,7 @@ $('mute').onclick = () => { muted = !muted; audio.setMuted(muted); $('mute').set
 const setMode = value => { inputMode = value; $('ask-mode').classList.toggle('selected', value === 'ask'); $('answer-mode').classList.toggle('selected', value === 'answer'); $('text').placeholder = value === 'answer' ? '把完整的原因和实现方式说出来…' : '每次只问一件能回答是或不是的事…'; $('text').focus(); };
 $('ask-mode').onclick = () => setMode('ask'); $('answer-mode').onclick = () => setMode('answer');
 $('text-form').onsubmit = event => {
-  event.preventDefault(); const text = $('text').value.trim(); if (!text || !ready || recording || micBusy || awaiting) return;
+  event.preventDefault(); const text = $('text').value.trim(); if (!text || !ready || recording || micBusy || awaiting || speaking) return;
   $('text').value = ''; void sendText(inputMode === 'answer' && !/^(我的答案|提交答案|答案是)/.test(text) ? `我的答案是${text}` : text);
 };
 $('show-board').onclick = () => { document.body.classList.remove('compact'); localStorage.setItem('pet-compact', '0'); document.querySelector('.play-panel').scrollIntoView({ behavior: 'smooth', block: 'start' }); };
@@ -349,7 +349,7 @@ try {
 } catch (error) { notice(error.message, true); }
 finally { libraryLoading = false; controls(); }
 if (!isLocal) {
-  notice('这是外观预览。真实桌宠请在本机运行 pnpm pet，再打开 http://127.0.0.1:3212。', true);
+  notice('当前为网页预览。语音游戏请在本机启动 pnpm pet，再打开 http://127.0.0.1:3212。', true);
   const link = document.createElement('a'); link.href = 'http://127.0.0.1:3212/'; link.textContent = ' 打开本机小矽 ↗'; $('notice').append(link);
   connection('外观预览'); bubble('真实的我住在你的电脑上。运行 pnpm pet，就能一起说话啦。');
 } else {

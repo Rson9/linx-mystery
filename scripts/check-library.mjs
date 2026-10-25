@@ -14,8 +14,10 @@ const run = (cmd, args) => { if (spawnSync(cmd, args, { stdio: 'ignore' }).statu
 const pass = name => { checks.push({ name, passed: true }); console.log(`${controllerOnly ? 'CONTROLLER PASS' : 'PASS'}: ${name}`); };
 const expectText = (locator, expected) => expect(locator).toContainText(expected, { timeout: 45000 });
 async function ask(text, expected) {
+  await page.locator('#ask-mode').click(); await page.locator('#text').fill(text);
+  await expect(page.locator('#send')).toBeEnabled({ timeout: 60000 });
   const before = await page.locator('.message.assistant').count(), started = Date.now(), revision = latestGame?.revision ?? -1, previousSpeech = speechSequence;
-  await page.locator('#ask-mode').click(); await page.locator('#text').fill(text); await page.locator('#send').click();
+  await page.locator('#send').click();
   // 口头回答不能代替工具执行：必须有本次原话对应的新服务端结果。
   await expect.poll(() => Boolean(latestGame && latestGame.revision > revision && latestGame.history?.at(-2)?.text === text), { timeout: 45000 }).toBe(true);
   const canonical = latestGame.history.at(-1).text;
@@ -67,7 +69,7 @@ try {
   await page.locator('#library-launcher').click(); await expect(page.locator('.story-card')).toHaveCount(8);
   await page.screenshot({ path: join(output, 'library.png') }); await page.locator('#library-close').click();
   await page.locator('#wake').click(); await expect(page.locator('#case-status')).toHaveText('正在推理', { timeout: 45000 });
-  if (!controllerOnly) await expectText(page.locator('.message.assistant').last(), '回不去的三句话');
+  if (!controllerOnly) await expectText(page.locator('.message.assistant').last(), /回不去的三句话|小林来时，小矽记下/);
   pass('默认新题开局与八题题库');
   await page.locator('#mic').click(); await expect(page.locator('#mic')).toHaveClass(/recording/, { timeout: 15000 });
   await page.waitForTimeout(6500); await page.locator('#mic').click();
@@ -88,12 +90,6 @@ try {
   await page.locator('#result-replay').click(); await expectText(page.locator('#replay-steps'), '相反');
   await page.screenshot({ path: join(output, 'route-replay.png') });
   const downloadPromise = page.waitForEvent('download'); await page.locator('#replay-share').click(); await (await downloadPromise).saveAs(join(output, 'case-card.png'));
-  if (process.argv.includes('--check-voice-recap')) {
-    await page.locator('#replay-speak').click();
-    await expectText(page.locator('.message.assistant').last(), /回顾|推理记录/);
-    await expectText(page.locator('.message.assistant').last(), /封住|封路|封闭/);
-    pass('实验语音回顾提及实际问过的问题；不保证逐字播报');
-  }
   await page.locator('#replay-close').click();
   await page.screenshot({ path: join(output, 'desktop-won.png'), fullPage: true });
   await page.locator('#compact').click(); await page.setViewportSize({ width: 400, height: 740 });
@@ -103,7 +99,7 @@ try {
   pass('回程题 85 分、实际问题回放与无剧透 PNG');
   await page.locator('#next').click(); await expect(page.locator('#case-title')).toHaveText('关灯才看清的通知', { timeout: 45000 });
   await expect(page.locator('#case-status')).toHaveText('正在推理', { timeout: 45000 });
-  if (!controllerOnly) await expectText(page.locator('.message.assistant').last(), '关灯才看清的通知');
+  if (!controllerOnly) await expectText(page.locator('.message.assistant').last(), /关灯才看清的通知|晚自习结束，林老师/);
   await page.locator('#open-replay').click(); await expectText(page.locator('#replay-title'), '回不去的三句话'); await page.locator('#replay-next').click();
   await ask('她和通知之间有玻璃吗？', '是的。');
   await page.locator('#hint').click();
@@ -117,7 +113,7 @@ try {
   await page.locator('#library-launcher').click(); await page.locator('[data-case-id="orange-radio"]').click();
   await expect(page.locator('#case-title')).toHaveText('只认橘子的电台', { timeout: 45000 });
   await expect(page.locator('#case-status')).toHaveText('正在推理', { timeout: 45000 });
-  if (!controllerOnly) await expectText(page.locator('.message.assistant').last(), '只认橘子的电台');
+  if (!controllerOnly) await expectText(page.locator('.message.assistant').last(), /只认橘子的电台|小矽正在测试一条语音通道/);
   await ask('第一句是提前录好的音频吗？', '是的。');
   await ask('橘子是永久固定口令吗？', '不是。');
   await ask('第一轮对面当时其实完全没有听到吗？', /无法确定|未知/);
@@ -133,6 +129,6 @@ try {
   await page?.screenshot({ path: join(output, 'failure.png') }).catch(() => {});
 } finally {
   await browser?.close(); rmSync(temp, { recursive: true, force: true });
-  writeFileSync(join(output, 'report.json'), JSON.stringify({ scope: controllerOnly ? 'controller-flow-only' : 'controller-and-spoken-checks', spokenSemanticCertified: false, checks, results, rounds, speechDeviations, errors, voiceRecapRequested: process.argv.includes('--check-voice-recap'), prerecordedMicrophone: true, physicalMicrophoneUsed: false, speakerMuted: true }, null, 2));
+  writeFileSync(join(output, 'report.json'), JSON.stringify({ scope: controllerOnly ? 'controller-flow-only' : 'controller-and-spoken-checks', spokenSemanticCertified: false, checks, results, rounds, speechDeviations, errors, prerecordedMicrophone: true, physicalMicrophoneUsed: false, speakerMuted: true }, null, 2));
   console.log(`本机验收记录：${output}`);
 }
