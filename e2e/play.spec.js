@@ -4,7 +4,7 @@ test('完整试玩、刷新恢复、确认揭晓和换关', async ({ page }, inf
   page.on('pageerror', e => errors.push(e.message));
   await page.goto('/');
   await expect(page.getByRole('button', { name: '开启第一道谜题' })).toBeVisible();
-  await expect(page.locator('.case-card')).toHaveCount(5);
+  await expect(page.locator('.case-card')).toHaveCount(8);
   await page.screenshot({ path: `test-results/${info.project.name}-welcome.png`, fullPage: true });
   await page.getByRole('button', { name: '开启第一道谜题' }).click();
   await expect(page.locator('#case-title')).toHaveText('没有响的门铃');

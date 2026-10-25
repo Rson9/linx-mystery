@@ -37,22 +37,27 @@
     <div class="speech"><span id="speech-source">设备提示</span><p id="speech-text">嗨，我是小矽。唤醒我，一起解开一个不太寻常的故事吧。</p><span class="speech-corner">✧</span></div>
     <div class="voice-controls"><button id="wake" class="wake-button">唤醒并开始 <span>↗</span></button><button id="mic" class="mic-button" disabled aria-label="开始说话"><span class="mic-icon">●</span><span id="mic-label">点击说话</span></button><button id="interrupt" class="interrupt-button" disabled aria-label="打断播报">■</button></div>
     <p id="voice-help" class="voice-help">语音由灵矽提供 · 点击后才会打开麦克风</p>
-    <div class="quick-actions"><button id="hint" disabled>✦ 给个提示</button><button id="repeat" disabled>↺ 重听故事</button><button id="next" disabled>下一题 →</button></div>
+    <div class="quick-actions"><button id="library-launcher">▦ 选个故事</button><button id="hint" disabled>✦ 给个提示</button><button id="repeat" disabled>↺ 重听故事</button><button id="next" disabled>下一题 →</button></div>
     <div id="compact-game" class="compact-game" hidden><span id="compact-title"></span><span id="compact-stats"></span></div>
+    <button id="open-replay" class="replay-link" hidden>↺ 回看这一局 · 推理回放</button>
     <p id="notice" class="notice" role="status">本机麦克风和扬声器，模拟一台真正接入灵矽的语音设备。</p>
     <button id="show-board" class="board-toggle">展开推理台 · 也可文字作答 ↗</button>
   </section>
 
   <aside class="play-panel">
     <div class="panel-heading"><div><span class="eyebrow">LET'S FIGURE IT OUT</span><h1>小故事，大反转。</h1></div><span id="case-status" class="case-status">准备开局</span></div>
-    <section class="case-paper"><div class="paper-top"><span id="case-number">谜声 · 情境推理</span><span>◌</span></div><h2 id="case-title">先听故事，再换个角度。</h2><p id="premise">我会讲一个不合常理的小故事。你可以问“是或不是”的问题，确认线索，再说出你推理出的真相。</p><div class="stats"><span>有效提问 <b id="questions">0</b></span><span>提示 <b id="hints">0</b> / 3</span><span>得分 <b id="score">—</b></span></div><div class="paper-actions"><button id="start-game">开始游戏 ↗</button><button id="reveal" disabled>揭晓真相</button></div></section>
-    <div id="result" class="result" hidden><span class="result-mark">✦</span><div><b id="result-title"></b><p id="result-text"></p></div></div>
+    <section class="case-paper"><div class="paper-top"><span id="case-number">谜声 · 情境推理</span><span>◌</span></div><h2 id="case-title">先听故事，再换个角度。</h2><p id="premise">我会讲一个不合常理的小故事。你可以问“是或不是”的问题，确认线索，再说出你推理出的真相。</p><div class="stats"><span>计分提问 <b id="questions">0</b></span><span>提示 <b id="hints">0</b> / 3</span><span>得分 <b id="score">—</b></span></div><div class="paper-actions"><button id="start-game">开始游戏 ↗</button><button id="reveal" disabled>揭晓真相</button></div></section>
+    <div id="result" class="result" hidden><span class="result-mark">✦</span><div><b id="result-title"></b><p id="result-text"></p></div><button id="result-replay">回放这局 ↗</button></div>
+    <section id="coach" class="coach" hidden><b id="coach-title"></b><p id="coach-text"></p><button id="coach-hint">给一条提示 · −15 分</button></section>
+    <details class="starter-guide"><summary>第一次玩？不知道从哪一句问起？</summary><p>每次只问一件事。我会回答是、不是或无法确定；没有写进故事的细节不会临时编造。前 5 个计分问题不扣分，每条提示扣 15 分。想好后切到“我要作答”。</p><div id="ask-starters" class="ask-starters"></div></details>
     <section class="clue-section"><div class="small-heading"><h3>一起确认的线索</h3><span id="clue-count">0 条</span></div><div id="clues" class="clues"><p class="empty">好问题，是通往真相的第一步。</p></div></section>
     <section class="conversation-section"><div class="small-heading"><h3>推理电台</h3><span id="radio-state">尚未连接</span></div><div id="conversation" class="conversation" role="log" aria-live="polite"><p class="empty">唤醒小矽，真实的语音对话会出现在这里。</p></div></section>
     <form id="text-form" class="text-form"><div class="input-modes"><button type="button" id="ask-mode" class="selected">问一个问题</button><button type="button" id="answer-mode">我要作答</button><span>也可以用文字</span></div><div class="text-composer"><input id="text" maxlength="1100" autocomplete="off" aria-label="提问或提交答案" placeholder="例如：和光线有关系吗？"><button id="send" type="submit" aria-label="发送文字" disabled>↑</button></div></form>
   </aside>
 </main>
 <footer><span>◒ 谜声 × 灵矽</span><span>虚拟硬件演示 · 非独立实体设备</span></footer>
+<dialog id="library-dialog" class="wide-dialog" aria-labelledby="library-title"><header class="dialog-heading"><div><span class="eyebrow">PICK A LITTLE MYSTERY</span><h2 id="library-title">挑一个不寻常的故事。</h2></div><button id="library-close" aria-label="关闭题库">×</button></header><p id="library-status">正在整理故事…</p><section id="library-list" class="library-grid" aria-label="故事题库"></section><p class="dialog-note">新手推荐从暖场题开始。推理中的换题需要确认，不会因为浏览题库放弃当前进度。</p></dialog>
+<dialog id="replay-dialog" class="wide-dialog" aria-labelledby="replay-title"><header class="dialog-heading"><div><span class="eyebrow">YOUR REASONING, NOT JUST A SCORE</span><h2 id="replay-title">这一局，你是怎样想出来的。</h2></div><button id="replay-close" aria-label="关闭推理回放">×</button></header><p id="replay-summary"></p><section id="replay-metrics" class="replay-metrics"></section><section class="debrief"><span>题面的错觉 → 换个角度</span><p id="replay-illusion"></p><b id="replay-takeaway"></b></section><ol id="replay-steps" class="replay-steps"></ol><section class="debrief truth-card"><span>因果拼图</span><p id="replay-truth"></p></section><p id="replay-note" class="dialog-note"></p><section class="replay-actions"><button id="replay-speak">♫ 语音回顾 · 实验</button><button id="replay-share">↓ 无剧透破案卡</button><button id="replay-next">再来一个故事 →</button></section></dialog>
 <dialog id="confirm-dialog"><span class="eyebrow">ONE MORE THING</span><h2 id="confirm-title"></h2><p id="confirm-description"></p><div><button id="cancel">继续推理</button><button id="confirm-yes">确认</button></div></dialog>
 <dialog id="activation"><h2>还差一步，就能见到你。</h2><p>在灵矽现有 Agent 中添加设备，填入这个真实绑定码：</p><strong id="activation-code"></strong><p>绑定后关闭此窗口，再点“唤醒”。</p><div><button id="activation-close">我已完成绑定</button><a href="https://xrobo.qiniu.com/" target="_blank" rel="noopener">打开灵矽后台 ↗</a></div></dialog>
 </body></html>

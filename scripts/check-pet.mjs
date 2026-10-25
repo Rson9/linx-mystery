@@ -20,7 +20,7 @@ try {
   browser = await chromium.launch({ channel: 'chrome', headless: true, args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', `--use-file-for-fake-audio-capture=${join(temp, 'mic.wav')}`, '--mute-audio'] });
   const context = await browser.newContext({ permissions: ['microphone'], viewport: { width: 1360, height: 1000 } });
   page = await context.newPage(); page.on('pageerror', e => errors.push(e.message));
-  await page.goto(`http://127.0.0.1:${process.env.PET_PORT || 3212}`);
+  await page.goto(`http://127.0.0.1:${process.env.PET_PORT || 3212}/?case=silent-bell`);
   await page.locator('#wake').click();
   await expect(page.locator('#connection')).toContainText('灵矽已连接', { timeout: 30000 });
   await expect(page.locator('#case-title')).toHaveText('没有响的门铃', { timeout: 30000 }); pass('真实 Agent 开局与游戏状态同步');

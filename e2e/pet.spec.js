@@ -1,8 +1,11 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+// 同一虚拟设备单活；同一端口的用例不能并发抢设备。
+test.describe.configure({ mode: 'default' });
 test('桌宠从唤醒到录音、提示、文字作答、结算和下一题（模拟 Agent）', async ({ page }, info) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   const compact = info.project.name === 'pet-compact';
-  await page.goto(compact ? '/?compact=1' : '/');
+  await page.goto(compact ? '/?compact=1&case=silent-bell' : '/?case=silent-bell');
   await expect(page.locator('#pet-device')).toHaveAttribute('data-mood', 'sleeping');
   await page.screenshot({ path: `test-results/${info.project.name}-welcome.png`, fullPage: true });
   await page.locator('#wake').click();
@@ -42,5 +45,66 @@ test('桌宠从唤醒到录音、提示、文字作答、结算和下一题（�
   await expect(page.locator('#text')).toBeVisible();
   await page.locator('#wake').click();
   await expect(page.locator('#connection')).toContainText('等待唤醒');
+  expect(errors).toEqual([]);
+});
+
+test('新题选题、确认换题、渐进提示、真实记录回放与无剧透破案卡（模拟 Agent）', async ({ page }, info) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto(info.project.name === 'pet-compact' ? '/?compact=1' : '/');
+  await expect(page.locator('#case-title')).toHaveText('回不去的三句话');
+  await page.locator('#library-launcher').click();
+  await expect(page.locator('.story-card')).toHaveCount(8);
+  await page.locator('[data-case-id="window-note"]').click();
+  await expect(page.locator('#case-title')).toHaveText('关灯才看清的通知');
+  await page.locator('#library-launcher').click(); await page.locator('[data-case-id="return-route"]').click();
+  await page.locator('#wake').click();
+  await expect(page.locator('#case-status')).toHaveText('正在推理');
+  if (info.project.name === 'pet-compact') await page.locator('#show-board').click();
+  await page.locator('#text').fill('回程时，她面对的方向与来时相反吗？'); await page.locator('#send').click();
+  await expect(page.locator('#questions')).toHaveText('1');
+  await page.locator('#hint').click(); await expect(page.locator('#hints')).toHaveText('1');
+  await expect(page.locator('.message.assistant').last()).toContainText('另一头');
+  for (const text of ['小林穿蓝色衣服吗？', '小林的衣服是新的嘛？']) {
+    await page.locator('#text').fill(text); await page.locator('#send').click();
+    await expect(page.locator('#send')).toBeEnabled();
+  }
+  await expect(page.locator('#coach')).toBeVisible(); await expect(page.locator('#hints')).toHaveText('1');
+  await page.locator('#library-launcher').click(); await page.locator('[data-case-id="window-note"]').click();
+  await expect(page.locator('#confirm-dialog')).toBeVisible(); await page.locator('#cancel').click();
+  await expect(page.locator('#case-title')).toHaveText('回不去的三句话');
+  await page.locator('#answer-mode').click(); await page.locator('#text').fill('回程面对的方向相反，所以除了倒序还要左右互换'); await page.locator('#send').click();
+  await expect(page.locator('#result-title')).toHaveText('破案成功 · 85 分');
+  await page.locator('#result-replay').click();
+  await expect(page.locator('#replay-dialog')).toBeVisible();
+  await expect(page.locator('#replay-steps')).toContainText('回程时，她面对的方向与来时相反吗？');
+  await expect(page.locator('#replay-steps')).toContainText('保留未知');
+  await expect(page.locator('#replay-takeaway')).toContainText('视角');
+  await page.screenshot({ path: `test-results/${info.project.name}-replay.png`, fullPage: true });
+  const downloadPromise = page.waitForEvent('download'); await page.locator('#replay-share').click();
+  const download = await downloadPromise; expect(download.suggestedFilename()).toContain('85分.png');
+  const path = `test-results/${info.project.name}-case-card.png`; await download.saveAs(path);
+  const png = await readFile(path); expect(png.readUInt32BE(16)).toBe(1080); expect(png.readUInt32BE(20)).toBe(1350);
+  await page.locator('#replay-close').click(); await page.locator('#next').click();
+  await expect(page.locator('#case-title')).toHaveText('关灯才看清的通知');
+  await expect(page.locator('#open-replay')).toContainText('上一局'); await page.locator('#open-replay').click();
+  await expect(page.locator('#replay-title')).toContainText('回不去的三句话');
+  await page.locator('#replay-next').click(); await expect(page.locator('#case-status')).toHaveText('正在推理');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.locator('#wake').click(); expect(errors).toEqual([]);
+});
+
+test('已处理但没有 TTS 时恢复已确认文字，不重复取提示（模拟丢包）', async ({ page }) => {
+  const errors = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/'); await page.locator('#wake').click();
+  await expect(page.locator('#case-status')).toHaveText('正在推理');
+  await expect(page.locator('#send')).toBeEnabled(); await page.clock.install();
+  await page.locator('#text').fill('测试静默提示'); await page.locator('#send').click();
+  await expect(page.locator('#hints')).toHaveText('1'); await expect(page.locator('#send')).toBeDisabled();
+  await page.clock.fastForward(36000);
+  await expect(page.locator('#notice')).toContainText('没有重新执行');
+  await expect(page.locator('#speech-source')).toContainText('文字备用');
+  await expect(page.locator('#send')).toBeEnabled(); await expect(page.locator('#hints')).toHaveText('1');
+  await page.locator('#repeat').click(); await expect(page.locator('#send')).toBeEnabled();
+  await expect(page.locator('#hints')).toHaveText('1'); await page.locator('#wake').click();
   expect(errors).toEqual([]);
 });

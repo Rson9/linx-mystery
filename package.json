@@ -14,6 +14,8 @@
     "pet": "node --env-file-if-exists=.env scripts/pet.mjs",
     "pet:open": "node --env-file-if-exists=.env scripts/pet.mjs open",
     "pet:check": "node --env-file-if-exists=.env scripts/check-pet.mjs",
+    "library:check": "node scripts/check-library-data.mjs",
+    "library:check:live": "node --env-file-if-exists=.env scripts/check-library.mjs",
     "test": "node --test test/*.test.js",
     "test:e2e": "playwright test",
     "mcp:check": "node --env-file-if-exists=.env scripts/check-mcp.mjs",

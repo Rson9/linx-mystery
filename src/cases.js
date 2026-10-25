@@ -1,4 +1,6 @@
-// 谜底与规则只存在服务端，公开接口只投影 title / premise / difficulty。
+import { featuredCases } from './library/featured.js';
+
+// 谜底与规则只存在服务端，公开接口仅投影安全的题面与选题元数据。
 export const cases = [
   {
     id: 'silent-bell', title: '没有响的门铃', difficulty: '入门', minutes: 5, icon: '◉',
@@ -64,6 +66,10 @@ export const cases = [
       { id: 'winter', text: '当时天气很冷。', yes: ['冬天', '冬季', '很冷', '低温'], no: ['炎热', '夏天很热'] },
       { id: 'water', text: '液态水还在冰层下面。', yes: ['冰下有水', '冰层下面', '水在下面'], no: ['河干了', '没有水', '干涸', '水被抽走'] }
     ], samples: ['河面结冰了吗？', '当时是冬天吗？', '河水干涸了吗？']
-  }
+  },
+  ...featuredCases
 ];
-export const catalog = () => cases.map(({ id, title, difficulty, minutes, icon, premise, samples }) => ({ id, title, difficulty, minutes, icon, premise, samples }));
+export const catalog = () => cases.map(({ id, title, difficulty, minutes, icon, premise, samples, featured, origin, collection, theme, blurb }) => ({
+  id, title, difficulty, minutes, icon, premise, samples, featured: Boolean(featured), origin: origin || 'classic-adaptation',
+  collection: collection || '经典练习', theme: theme || '日常推理', blurb: blurb || '从一个不合常理的日常开始。'
+}));

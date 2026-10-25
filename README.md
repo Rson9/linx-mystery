@@ -2,11 +2,15 @@
 
 面向灵矽的语音情境推理游戏。听题、提问、获得提示、提交推理、结算和下一关；单人可玩，多人可围坐参与，不是跑团。
 
-**主入口已改为“小矽桌宠／虚拟硬件演示”。** 在桌面小窗里点击唤醒，听故事、开关麦克风、提问、获得提示并作答；可展开推理台查看真实对话、线索与分数。已通过真实浏览器链路的预录输入 → 灵矽 ASR / Agent / PCM TTS → 85 分结算与换题。
+**主入口是“小矽桌宠／虚拟硬件演示”。** 题库现有 3 道自编候选题 + 5 道经典改编，支持选题、渐进提示、因果作答、计分、实际记录回放及无剧透 PNG 破案卡。界面换题会新建语音会话，上一局文字回放留在当前页面。
+
+**当前真实语音未稳定通过：** 公网 MCP 工具发现及开局预检已恢复；最近完整复测完成前两题 85 / 80 分，第三题仍出现 Agent 漏调工具、口头给出相反判断。已拦截明显工具调用文本，但还需检查模型工具能力、实际挂载和平台兼容。历史三题 85 / 80 / 95 分不能作为当前配置稳定通过的证明。
 
 原来的规则网页保留作备用。Agent 主持仍为实验模式，外部独立模型是另一条备选路线；有限冒烟通过不代表完整盲测或安全认证。
 
 - [桌宠玩法、真实验收与边界](docs/pet.md)
+- [题库、提示、推理回放与当前验收状态](docs/library.md)
+- [三分钟演示排练稿](docs/demo.md)
 - [竞赛版优先级与验收标准](docs/competition-roadmap.md)
 - [灵矽接入](docs/linx-integration.md)
 - [六轮真实平台实测](docs/playtest.md)
@@ -27,13 +31,15 @@ pnpm pet
 
 已有灵矽 Agent、MCP 和本机设备配置会沿用；新设备在窗口内获取真实绑定码。桌宠运行不需要 Python / libopus，uv/Python 终端保留作兼容和诊断。桌宠服务只绑定本机，**不要将 3212 加入 frp**；公网上的 `/pet/` 仅为外观预览。
 
-![真实灵矽通关后的推理台](docs/assets/pet-desktop.png)
+以下是历史预录真实链路截图，不表示最新版当前配置已通过验收。
+
+![历史真实灵矽通关后的推理台](docs/assets/pet-desktop.png)
 
 <img src="docs/assets/pet-compact.png" width="300" alt="小矽真实平台 85 分通关后的桌宠小窗">
 
 只有一份 Node 锁文件 `pnpm-lock.yaml`，不混用 npm/yarn。Python 使用 `pyproject.toml` + `uv.lock`，不手动 pip 安装。
 
-运行 `pnpm start` 可打开原来的规则备用页面（端口以 .env 为准）。该旧页面不填密钥即可体验 5 道规则关卡。题面不等于谜底，未结束的公共 API 不下发真相和评分规准。网页麦克风与朗读为浏览器 Speech API，**不经过灵矽**；识别结果先填入输入框，检查后发送。浏览器厂商可能处理音频，请勿输入敏感内容。
+运行 `pnpm start` 可打开原来的规则备用页面（端口以 .env 为准）。该旧页面不填密钥即可体验 8 道规则关卡。题面不等于谜底，公共 API 不下发当前未揭晓题的真相和评分规准；已结束的上局记录可回看。网页麦克风与朗读为浏览器 Speech API，**不经过灵矽**；识别结果先填入输入框，检查后发送。浏览器厂商可能处理音频，请勿输入敏感内容。
 
 ## 不用专用硬件：Mac 连接真实灵矽
 
@@ -77,7 +83,7 @@ LINX_AGENT_HOST_ENABLED=1
 AI_HOST_ENABLED=0
 ```
 
-MCP 在 turn 阶段提供内部主持资料，Agent 提交结构化 judgment，commit 阶段校验证据、玩家引文、请求版本并由状态机结算；这条路径不调用独立模型 API。平台需刷新工具并使用 [新提示词](docs/agent-host-prompt.txt)，操作见 Agent 主持文档。
+标准问法做完整问题的精确内置核对；其他提问由 MCP 在 turn 阶段提供内部主持资料，Agent 提交结构化 judgment，commit 阶段校验证据、玩家引文、请求版本并由状态机结算。完整答案仍走因果规准判断；这条路径不调用独立模型 API。平台需刷新工具并使用 [新提示词](docs/agent-host-prompt.txt)，操作见 Agent 主持文档。
 
 私有资料会进入 Agent/平台上下文，不是安全隔离字段；仍可能被模型泄露或错误判定。本轮一条攻击样本未泄露，不代表抗注入认证。网页不提供这份内部资料。
 
@@ -108,11 +114,13 @@ pnpm eval:host
 ## 测试
 
 ```bash
+pnpm library:check # 八题结构与引用检查；不等于逻辑或真人体验合格
 pnpm test          # 引擎、主持结构校验、HTTP/MCP 集成
 pnpm test:e2e      # 原网页 + 桌宠完整/小窗流程，使用模拟 Agent
 pnpm voice:test    # uv 下的 Python 测试，含本机 libopus 编解码
 pnpm eval:host     # 配置真实模型后运行，可能产生 API 费用
-pnpm pet:check --allow-platform # 真实桌宠界面验收，预录输入，不采集物理麦克风
+pnpm pet:check --allow-platform # 经典题真实桌宠验收，预录输入
+pnpm library:check:live --allow-platform # 新题真实链路，区分标准问法与 Agent 判断
 ```
 
 依赖锁文件可复现安装。缺少 libopus 时 Python 原生编解码测试会跳过，不等于本机音频已通过。真实平台语音诊断会消耗少量平台资源。
@@ -135,7 +143,10 @@ Dockerfile 使用 pnpm frozen lockfile，镜像构建/运行尚未实测。对�
 ## 代码
 
 ```text
-src/cases.js          固定谜题、审核事实、提示和评分规准（服务端）
+src/cases.js          经典改编与公共题库投影（服务端）
+src/library/          三道自编候选、事实、因果规准与复盘说明
+src/library.js        题库检查、明确命令、标准问法和递进提示
+src/replay.js         实际事件回放、计分与公开投影
 src/host.js           AI 裁判、输出与引用校验
 src/engine.js         状态、计分、持久化、规则与 AI 模式
 src/server.js         游戏 API、Streamable HTTP MCP、认证

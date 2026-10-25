@@ -6,6 +6,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import WebSocket, { WebSocketServer } from 'ws';
 import { normalizeUtterance } from './device-view.js';
+import { cases, catalog } from './cases.js';
+import { playerCommand } from './library.js';
+import { projectReplay } from './replay.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const identityFile = resolve(root, '.local/lingxi-device.json');
@@ -49,9 +52,11 @@ export function projectGame(view) {
   if (!view?.state) return { state: null, judging: false };
   const s = view.state;
   const state = {};
-  for (const key of ['gameId', 'caseId', 'title', 'premise', 'status', 'questions', 'hintsUsed', 'attempts', 'score', 'lastVerdict']) state[key] = s[key];
+  for (const key of ['gameId', 'caseId', 'title', 'premise', 'status', 'questions', 'hintsUsed', 'attempts', 'score', 'lastVerdict', 'revision', 'collection', 'theme', 'startedAt', 'elapsedSeconds', 'hintsAvailable']) state[key] = s[key];
   state.history = (s.history || []).slice(-40).map(x => ({ role: x.role === 'user' ? 'user' : 'assistant', text: String(x.text).slice(0, 4000) }));
-  if (['won', 'revealed'].includes(s.status)) state.truth = s.truth;
+  if (s.status === 'playing' && s.nudge) state.nudge = { title: String(s.nudge.title), text: String(s.nudge.text) };
+  if (['won', 'revealed'].includes(s.status)) { state.truth = s.truth; state.replay = projectReplay(s.replay); }
+  if (s.previousRound && (s.status !== 'playing' || s.previousRound.caseId !== s.caseId)) state.previousRound = projectReplay(s.previousRound);
   return { state, judging: Boolean(view.judging) };
 }
 
@@ -85,7 +90,7 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
   upstreamFactory = (url, options) => new WebSocket(url, options),
   readGame = gameReader(process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}`, process.env.LINX_SERVICE_TOKEN),
   noteInput = inputRecorder(process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}`, process.env.LINX_SERVICE_TOKEN),
-  gameOrigin = process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}` } = {}) {
+  gameOrigin = process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}`, startupRetryMs = 8000 } = {}) {
   const app = express(), server = createServer(app);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16384 });
   const sessions = new Map();
@@ -105,6 +110,7 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
   });
   app.use(express.json({ limit: '4kb' }));
   app.get('/healthz', (_req, res) => res.json({ status: 'ok', service: 'misheng-pet' }));
+  app.get('/api/library', (_req, res) => res.json({ cases: catalog() }));
   app.post('/api/session', (_req, res) => {
     for (const [key, expires] of sessions) if (expires < Date.now()) sessions.delete(key);
     if (sessions.size >= 24) sessions.delete(sessions.keys().next().value);
@@ -128,8 +134,8 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
     wss.handleUpgrade(req, socket, head, peer => { activePeer = peer; wss.emit('connection', peer, req); });
   });
   wss.on('connection', async peer => {
-    let upstream, ready = false, recording = false, recordingSince = 0, session, identity;
-    let currentInput = null, intentEpoch = 0;
+    let upstream, ready = false, recording = false, speechActive = false, recordingSince = 0, session, identity;
+    let currentInput = null, intentEpoch = 0, startupRetry;
     let poller, heartbeat, helloTimer, lastPong = Date.now(), lastPing = 0, reading = false, lastView = '', warned = false;
     const send = data => { if (peer.readyState === WebSocket.OPEN) peer.send(JSON.stringify(data)); };
     const fail = message => { send({ type: 'error', message }); peer.close(1011, 'Voice connection failed'); };
@@ -137,7 +143,7 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
     const control = (type, fields = {}) => ({ session_id: session, type, ...fields });
     peer.on('close', () => {
       if (activePeer === peer) activePeer = null;
-      clearInterval(poller); clearInterval(heartbeat); clearTimeout(helloTimer);
+      clearInterval(poller); clearInterval(heartbeat); clearTimeout(helloTimer); clearTimeout(startupRetry);
       upstream?.terminate();
     });
     peer.on('error', () => {});
@@ -152,22 +158,37 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
       try { msg = JSON.parse(raw.toString()); } catch { return; }
       if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return;
       if (msg.type === 'record' && msg.state === 'start' && !recording) {
-        intentEpoch++; currentInput = { inputId: randomUUID(), text: null, source: 'voice' };
+        intentEpoch++; clearTimeout(startupRetry); speechActive = false; currentInput = { inputId: randomUUID(), text: null, source: 'voice' };
         upstreamJson(control('abort', { reason: 'wake_word_detected' }));
         upstreamJson(control('listen', { state: 'start', mode: 'manual' }));
         recording = true; recordingSince = Date.now();
       } else if (msg.type === 'record' && msg.state === 'stop' && recording) {
         recording = false; upstreamJson(control('listen', { state: 'stop', mode: 'manual' }));
       } else if (msg.type === 'abort') {
-        intentEpoch++; currentInput = null; recording = false; upstreamJson(control('abort', { reason: 'wake_word_detected' }));
+        intentEpoch++; clearTimeout(startupRetry); currentInput = null; recording = false; speechActive = false; upstreamJson(control('abort', { reason: 'wake_word_detected' }));
       } else if (msg.type === 'say' && typeof msg.text === 'string' && msg.text.trim() && msg.text.length <= 1200 && !recording) {
-        const generation = ++intentEpoch;
+        const generation = ++intentEpoch; clearTimeout(startupRetry); speechActive = false;
         currentInput = { inputId: randomUUID(), text: msg.text.trim(), source: 'text' };
         try { await noteInput(identity, session, currentInput); }
         catch { return fail('无法登记本次操作，已停止发送以避免重复扣分，请重新连接'); }
         if (generation !== intentEpoch || peer.readyState !== WebSocket.OPEN) return;
         upstreamJson(control('abort', { reason: 'wake_word_detected' }));
+        // 给平台取消上一段播报的控制消息留出处理时间，避免紧接着的新 detect 被旧取消覆盖。
+        await new Promise(resolve => setTimeout(resolve, 120));
+        if (generation !== intentEpoch || peer.readyState !== WebSocket.OPEN) return;
         upstreamJson(control('listen', { state: 'detect', text: msg.text.trim() }));
+        const command = playerCommand(msg.text, cases);
+        if (command?.action === 'start' && command.caseId) startupRetry = setTimeout(async () => {
+          if (generation !== intentEpoch || peer.readyState !== WebSocket.OPEN) return;
+          try {
+            const view = await readGame(identity, session);
+            if (generation !== intentEpoch || peer.readyState !== WebSocket.OPEN || (view.state?.caseId === command.caseId && view.state.status === 'playing')) return;
+            send({ type: 'note', message: '游戏尚未确认开局，正在以同一输入凭据重试一次；不会自动重开已开始的题目。' });
+            speechActive = false; upstreamJson(control('abort', { reason: 'wake_word_detected' }));
+            await new Promise(resolve => setTimeout(resolve, 120));
+            if (generation === intentEpoch && peer.readyState === WebSocket.OPEN) upstreamJson(control('listen', { state: 'detect', text: msg.text.trim() }));
+          } catch { send({ type: 'note', message: '无法确认开局状态，没有重发。可检查服务或点“开始这题”。' }); }
+        }, startupRetryMs).unref();
       }
     });
     try {
@@ -189,7 +210,7 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
       upstream.on('close', () => { if (peer.readyState === WebSocket.OPEN) fail('灵矽会话已结束，请重新唤醒小矽'); });
       upstream.on('message', (raw, binary) => {
         if (binary) {
-          if (ready && !recording && peer.readyState === WebSocket.OPEN) {
+          if (ready && speechActive && !recording && peer.readyState === WebSocket.OPEN) {
             if (peer.bufferedAmount > 1024 * 1024) return fail('音频传输积压，请重新连接');
             peer.send(raw);
           }
@@ -228,7 +249,17 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
           }
           send({ type: 'stt', text });
         }
-        else if (msg.type === 'tts') send({ type: 'tts', state: msg.state, text: typeof msg.text === 'string' ? msg.text.slice(0, 4000) : '', is_aborted: Boolean(msg.is_aborted) });
+        else if (msg.type === 'tts') {
+          if (msg.is_aborted) { speechActive = false; send({ type: 'tts', state: msg.state, text: '', is_aborted: true }); return; }
+          if (msg.state === 'start' && !recording) speechActive = true;
+          if (msg.state === 'sentence_start' && typeof msg.text === 'string' && /\bmystery_(?:turn|commit|catalog)\s*\(|["']?privateContext["']?\s*[:=]|\brequestId\s*[:=]/.test(msg.text)) {
+            speechActive = false;
+            return fail('检测到工具调用文本而非游戏播报，已停止输出。请检查灵矽 Agent 的工具挂载和模型工具调用能力；游戏进度以推理台记录为准。');
+          }
+          if (!speechActive || recording) return;
+          send({ type: 'tts', state: msg.state, text: typeof msg.text === 'string' ? msg.text.slice(0, 4000) : '', is_aborted: false });
+          if (msg.state === 'stop') speechActive = false;
+        }
         else if (msg.type === 'error' || msg.type === 'goodbye') fail('平台暂时无法继续会话，请重新唤醒');
         // 不转发 mcp / custom 或任意 JSON；内部主持资料不能进入桌宠网页。
       });

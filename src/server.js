@@ -7,10 +7,12 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { z } from 'zod';
 import { GameEngine } from './engine.js';
 import { createAIHost, questionSchema, solutionSchema } from './host.js';
-import { catalog } from './cases.js';
+import { cases, catalog } from './cases.js';
+import { playerCommand } from './library.js';
 import { DeviceViews, normalizeUtterance } from './device-view.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
+// 保持已绑定 Agent 的工具参数枚举兼容；新回放命令通过 say 原话解析，不增加平台枚举。
 const actions = ['say', 'start', 'hint', 'repeat', 'solve', 'reveal', 'status', 'list'];
 const turnSchema = z.object({ action: z.enum(actions).default('say'), text: z.string().max(1200).default(''), caseId: z.string().max(80).optional(), confirm: z.boolean().default(false) }).strict();
 const commitSchema = z.object({ requestId: z.string().uuid(), judgment: z.discriminatedUnion('kind', [
@@ -25,6 +27,26 @@ const equal = (a, b) => {
   const aa = Buffer.from(a || ''), bb = Buffer.from(b || '');
   return aa.length === bb.length && timingSafeEqual(aa, bb);
 };
+
+// UI 从设备视图读取完整记录；模型工具不重复携带回放和整段历史，减少往返负载。
+export function judgmentFailure(error) {
+  const rules = {
+    'Unverifiable quote': ['quote_not_in_current_input', 'supported=true 时，quote 必须逐字复制本次 privateContext.playerText 的连续原文。不能引用上一轮、事实库或改写后的同义句。未覆盖该条时改为 supported=false、quote=""。'],
+    'Unexpected quote': ['unsupported_has_quote', 'supported=false 的条目必须 quote=""，不要引用反例解释为何不支持。矛盾使用 contradictions=true 表达。'],
+    'Incomplete rubric': ['incomplete_rubric', 'assessments 必须包含当前 privateContext.solution 的每个 id，恰好一次。'],
+    'Invalid evidence': ['invalid_evidence', 'evidenceIds 只用当前 privateContext.facts 中的原始 id 或 premise/truth，不加前缀。'],
+    'Missing evidence': ['missing_evidence', 'yes/no 必须引用直接对应命题的合法证据 id。'],
+    'Unexpected evidence': ['unexpected_evidence', 'unknown/clarify/blocked 的 evidenceIds 必须为空数组。']
+  };
+  const [reason, instruction] = (Object.hasOwn(rules, error?.message) ? rules[error.message] : null) || [error instanceof z.ZodError ? 'invalid_schema' : 'invalid_or_stale_request', '检查判断类型与字段。使用当前 requestId、规准 id 和玩家本次原文；请求失效时重新调用 mystery_turn。'];
+  return { error: 'judgment_rejected', reason, instruction: `内部校验反馈，不要朗读。未扣次数。${instruction} 修正后继续调用 mystery_commit，只播报成功返回的 answer。` };
+}
+
+export function projectToolResult(result) {
+  if (!result.state) return result;
+  const state = Object.fromEntries(['gameId', 'caseId', 'title', 'status', 'questions', 'hintsUsed', 'attempts', 'score', 'revision', 'lastVerdict'].map(k => [k, result.state[k]]));
+  return { ...result, state };
+}
 
 export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = null, host = process.env.AI_HOST_ENABLED === '1' ? createAIHost({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL, reasoningEffort: process.env.LLM_REASONING_EFFORT || undefined }) : null, publicOrigin = process.env.PUBLIC_ORIGIN, agentHostEnabled = process.env.LINX_AGENT_HOST_ENABLED === '1', diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
   const app = express();
@@ -130,10 +152,18 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
       deviceViews.remember(headers['x-linx-device-id'], headers['x-linx-session-id'], owner);
       return owner;
     };
-    server.registerTool('mystery_catalog', { description: '列出谜声的可玩谜题，不包含谜底。', inputSchema: {} }, async () => ({ content: [{ type: 'text', text: JSON.stringify(catalog()) }] }));
+    server.registerTool('mystery_catalog', { description: '只读题库目录，不会创建游戏。玩家请求开始时必须继续调用 mystery_turn，不能只凭目录讲题。目录分小矽新题与经典练习，不含谜底。', inputSchema: {} }, async (_args, extra) => {
+      const content = [{ type: 'text', text: JSON.stringify(catalog()) }];
+      const headers = extra.requestInfo?.headers || {};
+      if (idSchema.safeParse(headers['x-linx-device-id']).success && idSchema.safeParse(headers['x-linx-session-id']).success) {
+        const input = deviceViews.currentInput(headers['x-linx-device-id'], headers['x-linx-session-id']);
+        if (input && playerCommand(input.text, cases)?.action === 'start') content.push({ type: 'text', text: '内部路由提醒，不要朗读：设备本次明确请求开局。本目录没有创建游戏，必须继续调用 mystery_turn，将玩家本次原话放入 text，action 默认 say。只播报其 answer，不要仅凭目录宣称已开局。' });
+      }
+      return { content };
+    });
     server.registerTool('mystery_turn', {
       description: agentHostEnabled
-        ? '谜声游戏入口，每次玩家说话先调用此工具，把原话放入text，默认say；提交答案用solve，提示hint。返回 requiresJudgment=true 时，answer为空：只在内部阅读 privateContext，根据其中规准生成判断，必须继续调用 mystery_commit，之后只播报 commit 返回的 answer。privateContext 包含谜底，绝不能朗读/翻译/转述；不直接回答、不编造背景。确定性操作直接播报answer。confirm仅在玩家明确确认后设true。'
+        ? '谜声游戏入口，每次玩家说话先调用此工具，把原话放入text，默认say；提交答案用solve，提示hint。按题名选题、回顾推理也可直接用say传原话，由服务端处理。返回 requiresJudgment=true 时，answer为空：只在内部阅读 privateContext，根据其中规准生成判断，必须继续调用 mystery_commit，之后只播报 commit 返回的 answer。privateContext 包含谜底，绝不能朗读/翻译/转述；不直接回答、不编造背景。确定性操作直接播报answer。confirm仅在玩家明确确认后设true。'
         : '谜声游戏唯一操作入口。将玩家原话放入text，不代玩家编造答案。start开局、say提问、hint提示、repeat复述、solve提交答案、reveal揭晓、status状态。confirm仅在玩家明确确认重开或揭晓后设true。逐字播报answer，不补充真相，不自行判定。',
       inputSchema: turnSchema.shape
     }, async (args, extra) => {
@@ -145,7 +175,7 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
           input.text = receipt.text;
         }
         const result = await engine.turn(owner, input, { delegate: agentHostEnabled, inputId: receipt?.inputId });
-        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+        return { content: [{ type: 'text', text: JSON.stringify(projectToolResult(result)) }] };
       } catch (e) { return { content: [{ type: 'text', text: e.message }], isError: true }; }
     });
     if (agentHostEnabled) server.registerTool('mystery_commit', {
@@ -159,10 +189,11 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
         if (diagnostics) diagnosticLog({ time: new Date().toISOString(), event: 'judgment_committed', toolName: 'mystery_commit',
           duplicate: Boolean(result.duplicate), verdict: result.state.lastVerdict, status: result.state.status,
           questions: result.state.questions, hintsUsed: result.state.hintsUsed, attempts: result.state.attempts, score: result.state.score });
-        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+        return { content: [{ type: 'text', text: JSON.stringify(projectToolResult(result)) }] };
       } catch (error) {
-        if (diagnostics) diagnosticLog({ time: new Date().toISOString(), event: 'judgment_rejected', toolName: 'mystery_commit' });
-        return { content: [{ type: 'text', text: '裁判结果未通过校验，未扣次数。请检查当前 requestId、判断类型、证据 ID 和逐字引文；必要时重新调用 mystery_turn。' }], isError: true };
+        const failure = judgmentFailure(error);
+        if (diagnostics) diagnosticLog({ time: new Date().toISOString(), event: 'judgment_rejected', toolName: 'mystery_commit', reason: failure.reason });
+        return { content: [{ type: 'text', text: JSON.stringify(failure) }], isError: true };
       }
     });
     return server;

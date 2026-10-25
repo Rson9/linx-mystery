@@ -6,9 +6,9 @@ import WebSocket, { WebSocketServer } from 'ws';
 import { createPetServer } from '../../src/pet-server.js';
 import { GameEngine } from '../../src/engine.js';
 const host = {
-  ask: async (_c, text) => text.includes('衣服')
+  ask: async (c, text) => text.includes('衣服')
     ? { verdict: 'unknown', evidenceIds: [], answer: '题目没有交代这一点，无法确定。' }
-    : { verdict: 'yes', evidenceIds: ['light'], answer: '是的。' },
+    : { verdict: 'yes', evidenceIds: [c.id === 'return-route' ? 'orientation' : c.id === 'window-note' ? 'glass' : c.id === 'orange-radio' ? 'recording' : 'light'], answer: '是的。' },
   judge: async () => ({ correct: true, covered: 2 })
 };
 const engine = new GameEngine(':memory:', null, host), sessions = new Map();
@@ -16,7 +16,8 @@ const upstream = createServer(), agent = new WebSocketServer({ server: upstream 
 agent.on('connection', socket => {
   const session = randomUUID(); sessions.set(session, session); let audioPackets = 0;
   const answer = async (text, voice = false) => {
-    const result = await engine.turn(session, { text });
+    const result = await engine.turn(session, text === '测试静默提示' ? { action: 'hint', text: '给我提示' } : { text });
+    if (text === '测试静默提示') return; // UI 超时恢复测试：引擎已处理，但没有 TTS。
     if (socket.readyState !== WebSocket.OPEN) return;
     if (voice) socket.send(JSON.stringify({ type: 'stt', text }));
     socket.send(JSON.stringify({ type: 'tts', state: 'start' }));
