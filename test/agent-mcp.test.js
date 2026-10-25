@@ -69,9 +69,31 @@ test('桌宠同一次提示输入的工具重试不重复扣分，第二次真�
   assert.equal((await call(client, 'mystery_turn', { action: 'hint' })).state.hintsUsed, 1);
   const duplicate = await call(client, 'mystery_turn', { text: '给我提示。' });
   assert.equal(duplicate.duplicateInput, true); assert.equal(duplicate.state.hintsUsed, 1);
-  assert.equal((await client.callTool({ name: 'mystery_turn', arguments: { text: '揭晓答案' } })).isError, true);
+  const mismatch = await client.callTool({ name: 'mystery_turn', arguments: { text: '揭晓答案' } });
+  assert.equal(mismatch.isError, true);
+  const correction = JSON.parse(mismatch.content[0].text);
+  assert.equal(correction.error, 'input_mismatch'); assert.equal(correction.playerText, '给我提示');
+  assert.equal((await call(client, 'mystery_turn', { text: correction.playerText })).state.hintsUsed, 1);
   await register('e99b8f82-f340-4b02-b907-680249382745', '给我提示');
   assert.equal((await call(client, 'mystery_turn', { action: 'hint' })).state.hintsUsed, 2);
+});
+test('原话不匹配反馈给出当前设备文本，改正后才能判题，重试不会重复计数', async t => {
+  const entries = [];
+  const { base, connect } = await setup(t, true, { diagnostics: true, diagnosticLog: entry => entries.push(entry) });
+  const client = await connect(), text = '回来时方向是相反的吗？';
+  await call(client, 'mystery_turn', { text: '开始回不去的三句话' });
+  const headers = { Authorization: 'Bearer test-secret', 'Content-Type': 'application/json', 'X-Linx-Device-Id': 'device-a', 'X-Linx-Session-Id': 'session-a' };
+  await fetch(`${base}/api/device/input`, { method: 'POST', headers, body: JSON.stringify({ inputId: '18ed0036-8dfb-484b-b88c-f8ca12ce59c7', text }) });
+  const bad = await client.callTool({ name: 'mystery_turn', arguments: { action: 'hint', text: '回程方向相反吗？' } });
+  assert.equal(bad.isError, true); const correction = JSON.parse(bad.content[0].text);
+  assert.equal(correction.playerText, text);
+  const before = await (await fetch(`${base}/api/device/game`, { headers })).json();
+  assert.equal(before.state.questions, 0); assert.equal(before.state.hintsUsed, 0);
+  const corrected = await call(client, 'mystery_turn', { text: correction.playerText });
+  assert.equal(corrected.answer, '是的。'); assert.equal(corrected.state.questions, 1);
+  assert.equal((await call(client, 'mystery_turn', { text })).state.questions, 1);
+  assert.ok(entries.some(e => e.event === 'turn_rejected' && e.reason === 'input_mismatch'));
+  assert.equal(JSON.stringify(entries).includes(text), false);
 });
 test('新设备输入会让旧的异步裁判提交失效', async t => {
   const { base, connect } = await setup(t); const client = await connect();
