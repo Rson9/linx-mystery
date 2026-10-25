@@ -4,7 +4,11 @@
 
 谜声是一款桌面语音情境推理游戏。听一个不寻常的故事，用“是或不是”的问题逐步确认线索，再说出你的解释。小矽负责守住故事的事实，你负责发现另一种可能。
 
-![谜声桌面界面](docs/assets/pet-desktop.png)
+<img src="docs/assets/xiaoxi-actions.gif" width="192" alt="小矽逐帧动作预览">
+
+小矽直接待在桌面上：透明无边框、可拖动、可置顶，空白区域不挡鼠标。平时只露出角色，需要时再展开推理台。
+
+![原生桌宠展开推理台](docs/assets/pet-native-board.png)
 
 ## 一局完整的推理
 
@@ -15,24 +19,32 @@
 - **回看这一局**：按实际问题、判词、提示与作答生成推理回放。
 - **带走破案卡**：下载不含谜底、对话或录音的 PNG，分享你的成绩。
 
-<img src="docs/assets/pet-compact.png" width="280" alt="小矽桌面小窗"> <img src="docs/assets/pet-case-card.png" width="280" alt="无剧透破案卡示例">
+<img src="docs/assets/pet-native.png" width="240" alt="透明桌宠待机状态"> <img src="docs/assets/pet-case-card.png" width="280" alt="无剧透破案卡示例">
 
 ## 快速启动
 
-运行环境：Node.js 24+（最低 22.13）、pnpm 12、Google Chrome。macOS 可自动打开独立桌面窗口；其他环境可在 Chrome 中访问本机地址。
+源码运行：Node.js 24+（最低 22.13）、pnpm 12。原生桌面应用面向 macOS 13+；已构建的 Mac 应用内置运行时，不需要另外安装 Node.js。
+
+```bash
+pnpm desktop:build  # 构建本机架构的 Mac 应用和 ZIP
+pnpm desktop:check  # 检查打包应用，不访问平台
+```
+
+也可直接从源码启动：
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm pet
 ```
 
-打开 **http://127.0.0.1:3212/**，选择故事，点击“唤醒并开始”。收到开局确认后，点击“说话”开始录音，说完再点一次发送。
+小矽会出现在桌面角落。点击角色显示操作，选择故事并点击“唤醒并开始”。收到开局确认后，点击说话开始录音，说完再点一次发送。右键可打开菜单，展开推理台后可以文字提问。
 
 语音需要已配置的灵矽 Agent、游戏 MCP 和已绑定设备。首次部署请按 [部署配置](docs/deployment.md) 完成设置；已有 `.env` 和绑定身份时会直接沿用，不需要另外配置独立模型密钥。
 
 ```bash
 pnpm pet --no-open  # 启动服务，不自动打开窗口
-pnpm pet:open      # 打开已运行的桌面窗口
+pnpm pet:open      # 打开已运行服务的原生桌宠
+pnpm pet:web       # 浏览器入口，需要 Chrome
 ```
 
 ## 第一次怎么玩
@@ -49,6 +61,7 @@ pnpm pet:open      # 打开已运行的桌面窗口
 
 | 文档 | 内容 |
 | --- | --- |
+| [原生桌宠](docs/desktop.md) | 透明窗口、拖动、动作、应用构建与配置目录 |
 | [使用指南](docs/pet.md) | 录音、文字、提示、结算、回放与常见操作 |
 | [故事与玩法](docs/library.md) | 题库分类、提示层级、计分和内容维护 |
 | [部署配置](docs/deployment.md) | 环境变量、启动、升级、持久化与反向代理 |
@@ -64,7 +77,9 @@ pnpm pet:open      # 打开已运行的桌面窗口
 
 桌面端口 `3212` **只供本机使用，不应暴露公网**。公开服务仅部署游戏 API 与 MCP。另保留文字版页面，其浏览器语音辅助与灵矽桌面语音相互独立。
 
-配置只保存在本机 `.env`；设备身份位于 `.local/lingxi-device.json`。两者都不应进入版本库或交付包。
+配置保存在运行目录的 `.env`，设备身份位于该目录的 `.local/lingxi-device.json`。源码启动会沿用项目现有配置，Mac 应用可通过菜单选择相同目录；两者都不应进入版本库或交付包。
+
+Mac 构建采用本地 ad-hoc 签名，不是 Apple Developer ID 公证安装包，跨机器首次打开可能需要在系统中确认。
 
 ## 验证与交付
 

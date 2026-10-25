@@ -284,8 +284,8 @@ async function startRecord() {
     notice('麦克风正在采集；音频只发送给灵矽，不在本地保存。');
   } catch (error) {
     await audio.stopCapture(); recording = false; mood('idle');
-    if (error.name === 'NotAllowedError') { document.body.classList.remove('compact'); localStorage.setItem('pet-compact', '0'); $('text').focus(); }
-    notice(error.name === 'NotAllowedError' ? '麦克风未获授权，已展开文字模式。允许浏览器访问后可重试。' : error.message, true);
+    if (error.name === 'NotAllowedError') { document.body.classList.remove('compact'); localStorage.setItem('pet-compact', '0'); window.dispatchEvent(new Event('pet:show-board')); $('text').focus(); }
+    notice(error.name === 'NotAllowedError' ? `麦克风未获授权，已展开文字模式。${window.mishengDesktop ? '请在系统设置中允许谜声使用麦克风。' : '允许浏览器访问后可重试。'}` : error.message, true);
   } finally { micBusy = false; controls(); }
 }
 async function stopRecord(sendStop = true) {
@@ -306,7 +306,7 @@ $('replay-close').onclick = () => $('replay-dialog').close();
 $('replay-share').onclick = async () => {
   if (!viewingReplay || viewingReplay.status !== 'won') return;
   $('replay-share').disabled = true;
-  try { await saveCaseCard(viewingReplay, document.querySelector('#pet-touch svg')); $('replay-note').textContent = '已生成无剧透破案卡：仅包含题名和结算数据，不含谜底、问题原文、录音或玩家身份；没有上传服务器。'; }
+  try { await saveCaseCard(viewingReplay, document.querySelector('#pet-touch canvas') || document.querySelector('#pet-touch svg')); $('replay-note').textContent = '已生成无剧透破案卡：仅包含题名和结算数据，不含谜底、问题原文、录音或玩家身份；没有上传服务器。'; }
   catch (error) { $('replay-note').textContent = error.message; }
   finally { $('replay-share').disabled = false; }
 };
@@ -337,6 +337,9 @@ $('compact').onclick = () => { document.body.classList.toggle('compact'); localS
 if (new URL(location.href).searchParams.get('compact') === '1' || localStorage.getItem('pet-compact') === '1') document.body.classList.add('compact');
 $('pet-touch').onclick = () => { if (!recording && !speaking && !connecting) { mood(ready ? 'celebrate' : 'idle'); bubble('摸摸已收到。准备好问一个好问题了吗？', '桌宠动作'); setTimeout(() => { if (!recording && !speaking && !connecting) mood(ready ? 'idle' : 'sleeping'); }, 1600); } };
 window.addEventListener('pagehide', () => { waiting(false); ws?.close(); void audio.close(); });
+if (window.mishengDesktop || new URL(location.href).searchParams.get('desktop') === '1') {
+  const { mountDesktop } = await import('./desktop.js'); await mountDesktop();
+}
 controls();
 try {
   const response = await fetch(isLocal ? './api/library' : '../api/catalog');

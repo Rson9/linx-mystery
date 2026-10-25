@@ -1,0 +1,11 @@
+import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = dirname(dirname(fileURLToPath(import.meta.url)));
+const executable = createRequire(import.meta.url)('electron');
+const env = { ...process.env }; delete env.ELECTRON_RUN_AS_NODE;
+const child = spawn(executable, [resolve(root, 'desktop/main.mjs'), `--config-dir=${root}`], { cwd: root, stdio: 'inherit', env });
+for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, () => child.kill('SIGTERM'));
+child.once('error', () => { console.error('原生桌宠启动失败，请重新安装锁定依赖。'); process.exitCode = 1; });
+child.once('exit', (code, signal) => { process.exitCode = signal ? 0 : code || 0; });

@@ -9,9 +9,10 @@ import { normalizeUtterance } from './device-view.js';
 import { cases, catalog } from './cases.js';
 import { playerCommand } from './library.js';
 import { projectReplay } from './replay.js';
+import { localProofMiddleware, loadLocalKey, serviceProof, NONCE_HEADER, PROOF_HEADER } from './local-service-auth.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
-const identityFile = resolve(root, '.local/lingxi-device.json');
+const identityFile = resolve(process.env.MISHENG_HOME || root, '.local/lingxi-device.json');
 export function loadPetIdentity(path = identityFile) {
   let data;
   try { data = JSON.parse(readFileSync(path, 'utf8')); }
@@ -90,7 +91,7 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
   upstreamFactory = (url, options) => new WebSocket(url, options),
   readGame = gameReader(process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}`, process.env.LINX_SERVICE_TOKEN),
   noteInput = inputRecorder(process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}`, process.env.LINX_SERVICE_TOKEN),
-  gameOrigin = process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}`, startupRetryMs = 8000 } = {}) {
+  gameOrigin = process.env.PET_GAME_ORIGIN || `http://127.0.0.1:${process.env.PORT || 3210}`, startupRetryMs = 8000, localAuthKey } = {}) {
   const app = express(), server = createServer(app);
   const wss = new WebSocketServer({ noServer: true, maxPayload: 16384 });
   const sessions = new Map();
@@ -101,6 +102,7 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
   const cookie = req => req.headers.cookie?.split(';').map(x => x.trim()).find(x => x.startsWith('pet_session='))?.slice(12);
   const authorized = req => { const value = sessions.get(cookie(req)); return value && value > Date.now(); };
   app.disable('x-powered-by');
+  app.use(localProofMiddleware('pet', localAuthKey));
   app.use((req, res, next) => {
     res.set({ 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer',
       'Permissions-Policy': 'microphone=(self), camera=()',
@@ -132,6 +134,10 @@ export function createPetServer({ identityProvider = loadPetIdentity, deviceProv
     if (!allowedOrigin(req) || !req.headers.origin || !authorized(req)) return reject(403, 'Forbidden');
     if (activePeer?.readyState === WebSocket.OPEN) return reject(409, 'Device Busy');
     wss.handleUpgrade(req, socket, head, peer => { activePeer = peer; wss.emit('connection', peer, req); });
+  });
+  wss.on('headers', (headers, req) => {
+    const nonce = req.headers[NONCE_HEADER.toLowerCase()];
+    if (/^[a-f0-9]{64}$/.test(nonce || '')) headers.push(`${PROOF_HEADER}: ${serviceProof(localAuthKey || loadLocalKey(), 'pet', req.socket.localPort, nonce)}`);
   });
   wss.on('connection', async peer => {
     let upstream, ready = false, recording = false, speechActive = false, recordingSince = 0, session, identity;

@@ -36,6 +36,7 @@ agent.on('connection', socket => {
 });
 upstream.listen(0, '127.0.0.1'); await once(upstream, 'listening');
 const runtime = createPetServer({
+  localAuthKey: 'b'.repeat(64),
   gameOrigin: 'http://127.0.0.1:3211', noteInput: async () => {},
   identityProvider: () => ({ device_id: '02:11:22:33:44:55', client_id: '9cae72cb-3561-41ab-8732-b95f3e6d77ed' }),
   deviceProvider: async () => ({ bound: true, url: 'wss://fixture.invalid/', token: 'fixture-only-not-a-real-token' }),

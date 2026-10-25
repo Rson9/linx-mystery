@@ -13,7 +13,7 @@
 ## 环境要求
 
 - Node.js 24+（最低 22.13），pnpm 12。
-- Google Chrome；macOS 支持自动打开独立窗口。
+- 原生桌宠使用 Electron，macOS 最低 13；浏览器备用入口与浏览器回归需要 Google Chrome。
 - 已配置的灵矽账户与支持工具调用的 Agent。
 - 可供平台访问的游戏引擎 HTTPS 地址。
 
@@ -64,6 +64,7 @@ pnpm pet
 | `DB_PATH` | `data/games.sqlite` | 游戏数据库路径 |
 | `PET_GAME_ORIGIN` | 本机 `PORT` 地址 | 桌面终端读取的可信游戏服务 |
 | `MCP_DIAGNOSTICS` | `0` | 输出有限的安全诊断事件 |
+| `MISHENG_HOME` | 项目目录 / 应用配置目录 | 绑定身份的根目录；原生应用同时从此目录加载配置和数据库 |
 | `LINGXI_OTA_URL` | 官方 HTTPS 服务 | 自定义设备服务地址，仅接受可信 HTTPS |
 
 独立模型适配通过 `LLM_BASE_URL`、`LLM_API_KEY`、`LLM_MODEL` 和可选 `LLM_REASONING_EFFORT` 配置。它不是桌面主路径的必需项，使用前应单独验证供应商格式与时延。不要把灵矽管理 token、设备 token 或 MCP 令牌当作独立模型密钥。
@@ -72,7 +73,8 @@ pnpm pet
 
 ```bash
 pnpm pet --no-open  # 仅启动服务
-pnpm pet:open      # 打开已有桌面服务
+pnpm pet:open      # 打开已有服务的原生桌宠
+pnpm pet:web       # 打开 Chrome 备用入口
 pnpm start         # 单独启动游戏引擎
 ```
 
@@ -109,7 +111,18 @@ docker run --rm -p 127.0.0.1:3210:3210 --env-file .env \
 
 镜像只运行游戏引擎，不包含桌面浏览器或麦克风。桌面终端仍在本机运行，通过 `PET_GAME_ORIGIN` 连接引擎。容器构建与运行需要在目标环境单独核对；当前自动验证以 Node 直接运行方式为主。
 
-## 交付包
+## Mac 桌面应用
+
+```bash
+pnpm desktop:build
+pnpm desktop:check
+```
+
+生成当前架构的 `.app` 与 ZIP，包含运行时、生产依赖、题库和角色素材。构建使用锁定依赖、独立临时目录和生产依赖平铺布局，不复制运行配置。退出检查会核对自有服务的清理。
+
+已有配置可在原生菜单中选择项目目录，沿用原来的 `.env` 和设备身份。首次安装、配置目录及签名边界见 [原生桌宠](desktop.md)。
+
+## 源码交付包
 
 ```bash
 pnpm package

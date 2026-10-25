@@ -11,6 +11,7 @@ import { createAIHost, questionSchema, solutionSchema } from './host.js';
 import { cases, catalog } from './cases.js';
 import { playerCommand } from './library.js';
 import { DeviceViews, normalizeUtterance } from './device-view.js';
+import { localProofMiddleware } from './local-service-auth.js';
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 // 保持已绑定 Agent 的工具参数枚举兼容；新回放命令通过 say 原话解析，不增加平台枚举。
@@ -49,7 +50,7 @@ export function projectToolResult(result) {
   return { ...result, state };
 }
 
-export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = null, host = process.env.AI_HOST_ENABLED === '1' ? createAIHost({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL, reasoningEffort: process.env.LLM_REASONING_EFFORT || undefined }) : null, publicOrigin = process.env.PUBLIC_ORIGIN, agentHostEnabled = process.env.LINX_AGENT_HOST_ENABLED === '1', diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)) } = {}) {
+export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/games.sqlite'), token = process.env.LINX_SERVICE_TOKEN, semantic = null, host = process.env.AI_HOST_ENABLED === '1' ? createAIHost({ url: process.env.LLM_BASE_URL, key: process.env.LLM_API_KEY, model: process.env.LLM_MODEL, reasoningEffort: process.env.LLM_REASONING_EFFORT || undefined }) : null, publicOrigin = process.env.PUBLIC_ORIGIN, agentHostEnabled = process.env.LINX_AGENT_HOST_ENABLED === '1', diagnostics = process.env.MCP_DIAGNOSTICS === '1', diagnosticLog = entry => console.info('[mcp]', JSON.stringify(entry)), localAuthKey } = {}) {
   const app = express();
   if (process.env.AI_HOST_ENABLED === '1' && !host) throw new Error('AI_HOST_ENABLED=1 时必须配置模型地址、密钥和型号');
   const engine = new GameEngine(dbPath, semantic, host);
@@ -58,6 +59,7 @@ export function createApp({ dbPath = process.env.DB_PATH || resolve(root, 'data/
   const buckets = new Map();
   const housekeeping = setInterval(() => { const now = Date.now(); for (const [key, b] of buckets) if (b.until < now) buckets.delete(key); deviceViews.prune(); }, 60000).unref();
   app.disable('x-powered-by');
+  app.use(localProofMiddleware('engine', localAuthKey));
   app.use((req, res, next) => {
     if (diagnostics && req.path.startsWith('/mcp')) {
       const started = Date.now();

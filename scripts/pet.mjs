@@ -25,6 +25,13 @@ async function wait(url, predicate) {
   throw new Error('服务未就绪，请检查端口、.env 和上方错误。');
 }
 function openWindow() {
+  if (!process.argv.includes('--web')) {
+    const child = spawn(process.execPath, [resolve(root, 'scripts/desktop.mjs')], { cwd: root, stdio: 'inherit', env: process.env });
+    children.add(child);
+    child.once('error', () => { console.error('原生桌宠未能启动；可用 pnpm pet --web 打开浏览器入口。'); process.exitCode = 1; stop(); });
+    child.once('exit', code => { children.delete(child); if (code) process.exitCode = code; stop(); });
+    return;
+  }
   const url = `${petUrl}/?compact=1`;
   if (process.platform === 'darwin') {
     const profile = resolve(root, '.local/pet-browser'); mkdirSync(profile, { recursive: true, mode: 0o700 });

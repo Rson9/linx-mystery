@@ -1,0 +1,59 @@
+/* The native window supplies transparency and click-through; no browser frame is drawn. */
+html.desktop,html.desktop body{background:transparent!important;overflow:hidden;min-height:0;width:100%;height:100%;user-select:none}
+.desktop .topbar,.desktop footer{display:none}
+.desktop:not(.panel-open) .desk{display:block;position:relative;width:320px;height:400px;margin:0;padding:0;max-width:none}
+.desktop:not(.panel-open) .companion{position:relative;width:100%;height:100%;max-width:none}
+.desktop:not(.panel-open) .play-panel,.desktop:not(.panel-open) .section-kicker,.desktop:not(.panel-open) .orbit,.desktop:not(.panel-open) .spark,.desktop:not(.panel-open) .stage-caption,.desktop:not(.panel-open) .voice-help,.desktop:not(.panel-open) .compact-game,.desktop:not(.panel-open) .board-toggle,.desktop:not(.panel-open) .replay-link{display:none!important}
+.desktop:not(.panel-open) .pet-stage{position:absolute;left:54px;top:123px;width:212px;height:238px;overflow:visible;isolation:auto}
+.desktop:not(.panel-open) .pet-stage::before{display:none}
+.desktop:not(.panel-open) .pet-character{width:212px;height:230px;padding:0;touch-action:none;cursor:grab;outline-offset:0}
+.desktop .pet-character:active{cursor:grabbing;transform:none}
+.desktop .pet-character svg{pointer-events:none}
+.desktop:not(.panel-open) .pet-name{display:none}
+.desktop:not(.panel-open) .pet-name small{font-size:9px;color:#48745a}
+.desktop:not(.panel-open) .pet-name .signal{display:none}
+.desktop:not(.panel-open) .ground-shadow{display:none}
+.desktop:not(.panel-open) .speech{position:absolute;left:10px;top:5px;width:300px;margin:0;min-height:0;max-height:111px;padding:11px 14px;border-radius:16px;background:#fffff9f5;box-shadow:0 4px 18px #153c2520;opacity:0;visibility:hidden;transition:opacity .18s;pointer-events:none}
+.desktop:not(.panel-open).bubble-open .speech,.desktop:not(.panel-open).controls-open .speech{opacity:1;visibility:visible;pointer-events:auto}
+.desktop:not(.panel-open) .speech::before{top:auto;bottom:-7px;left:144px;transform:rotate(225deg)}
+.desktop:not(.panel-open) .speech p{font-size:11px;line-height:1.75;-webkit-line-clamp:3;margin:4px 8px 0 0}
+.desktop:not(.panel-open) .speech>span:first-child{font-size:8px;letter-spacing:.5px}
+.desktop:not(.panel-open) .speech-corner{font-size:14px;bottom:6px;right:8px}
+.desktop:not(.panel-open) .voice-controls{position:absolute;bottom:3px;left:25px;right:25px;margin:0;gap:5px;opacity:0;visibility:hidden;transition:opacity .18s}
+.desktop:not(.panel-open).controls-open .voice-controls{opacity:1;visibility:visible}
+.desktop:not(.panel-open) .wake-button{min-width:0;padding:8px 9px;border-radius:12px;font-size:10px;flex:1;box-shadow:0 2px 7px #23483015}
+.desktop:not(.panel-open) .wake-button span{display:none}
+.desktop:not(.panel-open) .mic-button{min-width:0;padding:7px 9px;border-radius:12px;font-size:10px;flex:1;background:#edf5e5}
+.desktop:not(.panel-open) .mic-button.recording{background:#f4d7c8;box-shadow:0 0 0 3px #e4ab8d45}
+.desktop:not(.panel-open) .interrupt-button{min-width:27px;border-radius:10px;background:#fffef9}
+.desktop:not(.panel-open) .quick-actions{position:absolute;top:114px;left:10px;right:10px;display:flex;gap:0;justify-content:center;margin:0;opacity:0;visibility:hidden;transition:opacity .18s}
+.desktop:not(.panel-open).controls-open .quick-actions{opacity:1;visibility:visible}
+.desktop:not(.panel-open) .quick-actions button{border-radius:10px;padding:4px 7px;background:#fffff5e8;box-shadow:0 2px 8px #3553390c;font-size:9px}
+.desktop:not(.panel-open) .notice{display:none}
+.desktop:not(.panel-open) .notice.error{display:block;position:absolute;top:6px;left:10px;right:10px;background:#fff7ef;border:1px solid #e5c7af;border-radius:12px;padding:10px;margin:0;max-height:110px;overflow:auto;font-size:10px;box-shadow:0 3px 12px #55392012;z-index:5;pointer-events:auto}
+#desktop-toolbar{display:none}
+.desktop #desktop-toolbar{position:fixed;top:178px;right:2px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;opacity:0;visibility:hidden;transition:opacity .18s}
+.desktop.controls-open #desktop-toolbar{opacity:1;visibility:visible}
+.desktop #desktop-toolbar button{font-size:9px;padding:4px 8px;border-radius:9px;border:1px solid #bdcdb44d;background:#fffef2eb;color:#527546;box-shadow:0 2px 9px #2344230c}
+.desktop.panel-open body{padding:14px;background:transparent!important;user-select:auto}
+.desktop.panel-open .desk{margin:30px 0 0;padding:23px;max-width:none;width:100%;height:calc(100vh - 58px);display:grid;grid-template-columns:290px minmax(0,1fr);gap:22px;border:1px solid #d5dfca;border-radius:23px;background:#f5f7effa;box-shadow:0 5px 20px #1d3d3220;overflow:auto}
+.desktop.panel-open .pet-stage{height:300px}
+.desktop.panel-open .pet-character{width:264px}
+.desktop.panel-open .companion{width:290px}
+.desktop.panel-open .voice-controls{margin:20px 0 0;gap:5px}
+.desktop.panel-open .wake-button{min-width:105px;padding:12px 8px;font-size:10px}
+.desktop.panel-open .wake-button span{margin-left:7px}
+.desktop.panel-open .mic-button{min-width:104px;padding:10px 8px;font-size:10px}
+.desktop.panel-open .quick-actions{gap:0}
+.desktop.panel-open .quick-actions button{font-size:10px;padding:7px 5px}
+.desktop.panel-open .speech{margin-left:0;margin-right:0}
+.desktop.panel-open .play-panel{padding:20px;overflow:auto}
+.desktop.panel-open .text-form{position:sticky;bottom:0;z-index:2;background:#fafbf5;padding-top:8px;box-shadow:0 -7px 9px #fafbf5}
+.desktop.panel-open #desktop-toolbar{top:12px;bottom:auto;left:auto;right:32px;flex-direction:row;opacity:1;visibility:visible}
+.desktop.panel-open #desktop-toolbar button{font-size:10px;padding:6px 12px}
+.desktop dialog{user-select:text}
+.desktop .pet-canvas{display:block;width:100%;height:auto;pointer-events:none}
+.desktop .pet-character.has-sprite svg{display:none}
+.desktop:not(.panel-open) .pet-character.has-sprite{width:212px;height:230px;filter:drop-shadow(0 5px 5px #254b3430)}
+.desktop .pet-character.has-sprite:hover{transform:none}
+@media(prefers-reduced-motion:reduce){.desktop *{transition:none!important}}

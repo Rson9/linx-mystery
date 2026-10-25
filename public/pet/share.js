@@ -12,10 +12,13 @@ export async function saveCaseCard({ title, score, questions, hintsUsed, elapsed
   text('谜声 / 小矽的推理电台', 80, 94, 28); text('MY SPOILER-FREE CASE CARD', 80, 137, 17, '#95a584');
   text('这一局，想通了。', 80, 254, 62); text(`《${title}》`, 80, 323, 37, '#718963');
   if (character) {
-    const svg = character.cloneNode(true); svg.querySelector('.talk-mouth')?.remove();
-    const image = new Image();
-    await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error('角色图像生成失败')); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`; });
-    ctx.drawImage(image, 320, 390, 440, 453);
+    if (character instanceof HTMLCanvasElement) ctx.drawImage(character, 320, 390, 440, 453);
+    else {
+      const svg = character.cloneNode(true); svg.querySelector('.talk-mouth')?.remove();
+      const image = new Image();
+      await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = () => reject(new Error('角色图像生成失败')); image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(new XMLSerializer().serializeToString(svg))}`; });
+      ctx.drawImage(image, 320, 390, 440, 453);
+    }
   }
   text(score, 540, 966, 130, '#315c47', 'center'); text('破案得分', 540, 1016, 25, '#91a17e', 'center');
   const time = Number.isFinite(elapsedSeconds) ? `${Math.floor(elapsedSeconds / 60)}分${elapsedSeconds % 60}秒` : '未记录';

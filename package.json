@@ -1,6 +1,7 @@
 {
   "name": "linx-mystery",
-  "version": "0.2.0",
+  "version": "0.3.0",
+  "main": "desktop/main.mjs",
   "private": true,
   "packageManager": "pnpm@12.0.0",
   "type": "module",
@@ -13,6 +14,11 @@
     "dev": "node --watch --env-file-if-exists=.env src/server.js",
     "pet": "node --env-file-if-exists=.env scripts/pet.mjs",
     "pet:open": "node --env-file-if-exists=.env scripts/pet.mjs open",
+    "pet:web": "node --env-file-if-exists=.env scripts/pet.mjs --web",
+    "desktop": "node --env-file-if-exists=.env scripts/desktop.mjs",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:check": "node scripts/check-desktop.mjs",
+    "desktop:check:live": "node --env-file-if-exists=.env scripts/check-desktop-live.mjs",
     "pet:check": "node --env-file-if-exists=.env scripts/check-pet.mjs",
     "library:check": "node scripts/check-library-data.mjs",
     "library:check:live": "node --env-file-if-exists=.env scripts/check-library.mjs",
@@ -38,6 +44,8 @@
     "zod": "^3.25.76"
   },
   "devDependencies": {
-    "@playwright/test": "^1.64.1"
+    "@electron/packager": "20.3.0",
+    "@playwright/test": "^1.64.1",
+    "electron": "44.9.3"
   }
 }
